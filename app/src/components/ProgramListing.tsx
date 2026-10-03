@@ -1,24 +1,42 @@
-import { hex, type AsmSymbol, type ProgramLine } from '@/core/types'
+import { hex } from '@/core/format'
+import type { AsmSymbol, ProgramLine } from '@/core/types'
 import { useT } from '@/i18n'
-import { useState, type ReactNode } from 'react'
-import { cn, useRowInView } from './styles'
-
-const paperButton = 'h-11 border border-fan-ink px-3 text-[0.8125rem]'
+import type { ReactNode } from 'react'
+import { cn } from './styles'
+import { useRowInView } from './useRowInView'
 
 export function PaperHeader({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-      <div className="font-mono text-[0.8125rem] font-semibold tracking-wide uppercase">{title}</div>
+      <div className="font-mono text-code font-semibold tracking-wide uppercase">{title}</div>
       {children}
     </div>
   )
 }
 
-export function PaperButton({ children, onClick, disabled }: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
+/** Кнопка на перфопапері; `pressed` робить її половинкою перемикача. */
+export function PaperButton({
+  children,
+  onClick,
+  disabled,
+  pressed,
+  className,
+}: {
+  children: ReactNode
+  onClick: () => void
+  disabled?: boolean
+  pressed?: boolean
+  className?: string
+}) {
   return (
     <button
       type="button"
-      className={cn(paperButton, 'rounded hover:bg-bar disabled:opacity-45')}
+      aria-pressed={pressed}
+      className={cn(
+        'h-11 rounded border border-fan-ink px-3 text-code disabled:opacity-45',
+        pressed ? 'bg-fan-ink text-fanfold' : 'hover:bg-bar',
+        className,
+      )}
       disabled={disabled}
       onClick={onClick}
     >
@@ -28,6 +46,7 @@ export function PaperButton({ children, onClick, disabled }: { children: ReactNo
 }
 
 const columnHead = 'silk flex h-7 items-center border-y border-fan-rule tracking-widest text-fan-dim'
+const SCROLL = 'max-h-90 overflow-y-auto font-mono'
 
 export function SymbolTable({ symbols }: { symbols: AsmSymbol[] | null }) {
   const t = useT()
@@ -40,12 +59,12 @@ export function SymbolTable({ symbols }: { symbols: AsmSymbol[] | null }) {
         <div>{t.editor.address}</div>
         <div>{t.editor.references}</div>
       </div>
-      <div className="max-h-[22.5rem] overflow-y-auto font-mono">
+      <div className={SCROLL}>
         {symbols.map((s, i) => (
-          <div key={s.name} className={cn(grid, 'min-h-[1.875rem]', i % 2 === 1 && 'bg-bar')}>
+          <div key={s.name} className={cn(grid, 'min-h-7.5', i % 2 === 1 && 'bg-bar')}>
             <div className="truncate">{s.name}</div>
-            <div>{s.address}</div>
-            <div>{s.references.join(', ')}</div>
+            <div>{hex(s.address, 3)}</div>
+            <div>{s.references.map((r) => hex(r, 3)).join(', ')}</div>
           </div>
         ))}
       </div>
@@ -54,116 +73,78 @@ export function SymbolTable({ symbols }: { symbols: AsmSymbol[] | null }) {
   )
 }
 
-interface Props {
-  title: string
+interface Breakpoints {
+  marks: boolean[]
+  onToggle: (row: number) => void
+}
+
+/**
+ * Таблиця програми: адреса, мітка, команда, операнд, код. Із `breakpoints`
+ * зліва з'являється колонка «перфорації» з точками зупинки.
+ */
+export function ProgramTable({
+  program,
+  focusRow,
+  breakpoints,
+}: {
   program: ProgramLine[]
   /** Рядок команди, що виконується. */
   focusRow: number | null
-  /** Із точками зупинки зліва з'являється колонка «перфорації». */
-  breakpoints?: boolean[]
-  onToggle?: (row: number) => void
-  onClear?: () => void
-  symbols?: AsmSymbol[] | null
-  /** Розділ із лістингом зараз на екрані. */
-  visible: boolean
-}
-
-/** Монітор програми на перфопапері: адреса, мітка, команда, операнд, код. */
-export function ProgramListing({ title, program, focusRow, breakpoints, onToggle, onClear, symbols, visible }: Props) {
+  breakpoints?: Breakpoints
+}) {
   const t = useT()
-  const [view, setView] = useState<'listing' | 'symbols'>('listing')
-  const rows = useRowInView(focusRow, visible)
-  const marks = breakpoints !== undefined
+  const rows = useRowInView(focusRow)
   const grid = cn(
     'grid items-center',
-    marks
+    breakpoints
       ? 'grid-cols-[2.75rem_3.25rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_3.5rem]'
       : 'grid-cols-[3.25rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_3.5rem] px-4',
   )
 
   return (
-    <section aria-label={t.program.title} className="fanfold min-w-0">
-      <PaperHeader title={title}>
-        {symbols !== undefined && (
-          <div role="group" className="flex">
-            {(['listing', 'symbols'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                className={cn(
-                  paperButton,
-                  v === 'listing' ? 'rounded-l' : 'rounded-r border-l-0',
-                  view === v ? 'bg-fan-ink text-fanfold' : 'hover:bg-bar',
-                )}
-                onClick={() => setView(v)}
-              >
-                {t.program[v]}
-              </button>
-            ))}
-          </div>
-        )}
-      </PaperHeader>
-
-      {view === 'symbols' ? (
-        <SymbolTable symbols={symbols ?? null} />
+    <>
+      <div className={cn(columnHead, grid)}>
+        {breakpoints && <div />}
+        <div>{t.program.address}</div>
+        <div>{t.program.label}</div>
+        <div>{t.program.opcode}</div>
+        <div>{t.program.operand}</div>
+        <div>{t.program.code}</div>
+      </div>
+      {program.length === 0 ? (
+        <p className="px-4 py-4 text-fan-dim">{t.program.empty}</p>
       ) : (
-        <>
-          <div className={cn(columnHead, grid)}>
-            {marks && <div />}
-            <div>{t.program.address}</div>
-            <div>{t.program.label}</div>
-            <div>{t.program.opcode}</div>
-            <div>{t.program.operand}</div>
-            <div>{t.program.code}</div>
-          </div>
-          {program.length === 0 ? (
-            <p className="px-4 py-4 text-fan-dim">{t.program.empty}</p>
-          ) : (
-            <div ref={rows} className="max-h-[22.5rem] overflow-y-auto font-mono">
-              {program.map((line, i) => {
-                const address = hex(line.address, 3)
-                return (
-                  <div
-                    key={i}
-                    className={cn(
-                      grid,
-                      marks ? 'h-9' : 'h-[1.875rem]',
-                      i === focusRow ? 'bg-cursor-row font-bold' : i % 2 === 1 && 'bg-bar',
-                    )}
+        <div ref={rows} className={SCROLL}>
+          {program.map((line, i) => {
+            const address = hex(line.address, 3)
+            const marked = breakpoints?.marks[i] ?? false
+            return (
+              <div
+                key={i}
+                className={cn(grid, breakpoints ? 'h-9' : 'h-7.5', i === focusRow ? 'bg-cursor-row font-bold' : i % 2 === 1 && 'bg-bar')}
+              >
+                {breakpoints && (
+                  <button
+                    type="button"
+                    aria-pressed={marked}
+                    aria-label={t.program.breakpoint(address)}
+                    title={t.program.breakpoint(address)}
+                    className="flex h-9 w-11 items-center justify-center border-0 bg-transparent p-0"
+                    onClick={() => breakpoints.onToggle(i)}
                   >
-                    {marks && (
-                      <button
-                        type="button"
-                        aria-pressed={breakpoints[i]}
-                        aria-label={t.program.breakpoint(address)}
-                        title={t.program.breakpoint(address)}
-                        className="flex h-9 w-11 items-center justify-center border-0 bg-transparent p-0"
-                        onClick={() => onToggle?.(i)}
-                      >
-                        <span
-                          className={cn(
-                            'size-3.5 rounded-full border-2',
-                            breakpoints[i] ? 'border-bp bg-bp' : 'border-bp-ring',
-                          )}
-                        />
-                      </button>
-                    )}
-                    <div>{address}</div>
-                    <div className="truncate">{line.label}</div>
-                    <div>{line.mnemonic}</div>
-                    <div className="truncate">{line.operand}</div>
-                    <div>{hex(line.word, 4)}</div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <div className="flex min-h-3.5 justify-end px-4 py-1">
-            {marks && breakpoints.some(Boolean) && <PaperButton onClick={() => onClear?.()}>{t.program.clearBreakpoints}</PaperButton>}
-          </div>
-        </>
+                    <span className={cn('size-3.5 rounded-full border-2', marked ? 'border-bp bg-bp' : 'border-bp-ring')} />
+                  </button>
+                )}
+                <div>{address}</div>
+                <div className="truncate">{line.label}</div>
+                <div>{line.mnemonic}</div>
+                <div className="truncate">{line.operand}</div>
+                <div>{hex(line.word, 4)}</div>
+              </div>
+            )
+          })}
+        </div>
       )}
-    </section>
+    </>
   )
 }

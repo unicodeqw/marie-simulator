@@ -1,5 +1,7 @@
 import { discarding, exportListing, exportMap, newFile, openProject, saveProject } from '@/core/fileActions'
+import { baseName } from '@/core/format'
 import { assembleProject, projectStore, setSource } from '@/core/project'
+import { isa } from '@/core/wasm'
 import { useT } from '@/i18n'
 import { insertTab } from '@codemirror/commands'
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language'
@@ -12,27 +14,26 @@ import { useEffect, useRef } from 'react'
 import { PaperButton, PaperHeader, SymbolTable } from './ProgramListing'
 import { cn } from './styles'
 
-const WORDS = new Set(
-  'JNS LOAD STORE ADD SUBT INPUT OUTPUT HALT SKIPCOND JUMP CLEAR ADDI JUMPI DEC OCT HEX ORG END'.split(' '),
-)
-
 // Підсвітка за тими самими правилами, що й асемблер: коментар від «/»,
 // мітка — токен із комою, адресний літерал починається з цифри.
-const marie = StreamLanguage.define({
-  token(stream) {
-    if (stream.eatSpace()) return null
-    if (stream.peek() === '/') {
-      stream.skipToEnd()
-      return 'comment'
-    }
-    if (!stream.match(/^[^\s/]+/)) stream.next()
-    const word = stream.current()
-    if (word.includes(',')) return 'labelName'
-    if (WORDS.has(word.toUpperCase())) return 'keyword'
-    if (/^[+-]?\d[\da-f]*$/i.test(word)) return 'number'
-    return null
-  },
-})
+function marieLanguage() {
+  const words = new Set([...isa.instructions.map((i) => i.name.toUpperCase()), ...isa.directives])
+  return StreamLanguage.define({
+    token(stream) {
+      if (stream.eatSpace()) return null
+      if (stream.peek() === '/') {
+        stream.skipToEnd()
+        return 'comment'
+      }
+      if (!stream.match(/^[^\s/]+/)) stream.next()
+      const word = stream.current()
+      if (word.includes(',')) return 'labelName'
+      if (words.has(word.toUpperCase())) return 'keyword'
+      if (/^[+-]?\d[\da-f]*$/i.test(word)) return 'number'
+      return null
+    },
+  })
+}
 
 const highlight = HighlightStyle.define([
   { tag: tags.comment, class: 'tok-comment' },
@@ -58,7 +59,7 @@ function CodeEditor() {
           basicSetup,
           keymap.of([{ key: 'Tab', run: insertTab }]),
           EditorState.tabSize.of(8),
-          marie,
+          marieLanguage(),
           syntaxHighlighting(highlight),
           lintGutter(),
           hint.current.of([]),
@@ -97,7 +98,7 @@ function CodeEditor() {
     editor.dispatch(setDiagnostics(editor.state, diagnostics))
   }, [report, t])
 
-  return <div ref={host} className="min-h-[27.5rem] flex-1 overflow-hidden" />
+  return <div ref={host} className="min-h-110 flex-1 overflow-hidden" />
 }
 
 function Result() {
@@ -109,7 +110,7 @@ function Result() {
   return (
     <>
       <span className={cn('font-semibold', ok ? 'text-ed-ok' : 'text-ed-err')}>
-        {ok ? t.notice.assembled('') : t.notice.assemblyErrors(String(report.errorCount))}
+        {ok ? t.editor.assembled : t.editor.failed(report.errorCount)}
       </span>
       <span className="text-ed-dim">
         {stale && `${t.editor.stale} · `}
@@ -125,22 +126,18 @@ function Listing() {
   const fileName = projectStore.use((s) => s.fileName)
   return (
     <section aria-label={t.editor.listing} className="fanfold">
-      <PaperHeader title={`${t.editor.listing} · ${fileName.replace(/\.[^.]*$/, '')}.lst`}>
+      <PaperHeader title={`${t.editor.listing} · ${baseName(fileName)}.lst`}>
         <PaperButton disabled={!report} onClick={() => exportListing()}>
           {t.menu.exportListing}
         </PaperButton>
       </PaperHeader>
       {report ? (
-        <div className="max-h-[26rem] overflow-auto border-t border-fan-rule font-mono text-[0.78125rem] leading-6">
+        <div className="max-h-104 overflow-auto border-t border-fan-rule font-mono text-listing leading-6">
           <div className="min-w-max">
             {report.listing.split('\n').map((line, i) => (
               <div
                 key={i}
-                className={cn(
-                  'h-6 px-4 whitespace-pre',
-                  i % 2 === 1 && 'bg-bar',
-                  line.startsWith('   ****') && 'font-semibold text-bp',
-                )}
+                className={cn('h-6 px-4 whitespace-pre', i % 2 === 1 && 'bg-bar', line.startsWith('   ****') && 'font-semibold text-bp')}
               >
                 {line || ' '}
               </div>
@@ -199,14 +196,14 @@ export function EditorView() {
           <button
             type="button"
             title={`${t.editor.assemble} (F9)`}
-            className="ml-auto h-11 rounded-md bg-key-ochre px-5 font-semibold text-[#1a1612] shadow-[inset_0_-4px_0_rgb(0_0_0/0.2)] hover:brightness-110"
+            className="ml-auto h-11 rounded-md bg-key-ochre px-5 font-semibold text-on-lit shadow-[inset_0_-4px_0_rgb(0_0_0/0.2)] hover:brightness-110"
             onClick={assembleProject}
           >
             {t.editor.assemble}
           </button>
         </div>
         <CodeEditor />
-        <div role="status" className="flex flex-wrap justify-between gap-2 border-t border-line px-3.5 py-2.5 font-mono text-[0.8125rem]">
+        <div role="status" className="flex flex-wrap justify-between gap-2 border-t border-line px-3.5 py-2.5 font-mono text-code">
           <Result />
         </div>
       </section>

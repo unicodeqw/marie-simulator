@@ -1,18 +1,19 @@
 import { answer, confirmStore } from '@/core/confirm'
-import { exportDump } from '@/core/fileActions'
+import { saveDump } from '@/core/fileActions'
+import { hex, parseAddress } from '@/core/format'
 import { projectStore } from '@/core/project'
 import { coreDump, simStore } from '@/core/sim'
-import { hex } from '@/core/types'
+import { isa } from '@/core/wasm'
 import { useT } from '@/i18n'
 import { X } from 'lucide-react'
 import { AlertDialog, Dialog } from 'radix-ui'
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 
 const overlay = 'fixed inset-0 z-40 bg-black/55'
 const sheet =
   'fixed top-1/2 left-1/2 z-50 max-h-[90dvh] w-[min(46rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-line bg-chrome p-6 text-chrome-fg shadow-[0_16px_48px_rgb(0_0_0/0.4)]'
 const button = 'h-11 rounded-md border border-line px-4 hover:bg-line/30'
-const primary = 'h-11 rounded-md bg-key-ochre px-5 font-semibold text-[#1a1612] hover:brightness-110'
+const primary = 'h-11 rounded-md bg-key-ochre px-5 font-semibold text-on-lit hover:brightness-110'
 
 function Sheet({
   open,
@@ -82,22 +83,6 @@ export function AboutDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   )
 }
 
-const MNEMONICS = [
-  'JnS X',
-  'Load X',
-  'Store X',
-  'Add X',
-  'Subt X',
-  'Input',
-  'Output',
-  'Halt',
-  'Skipcond X',
-  'Jump X',
-  'Clear',
-  'AddI X',
-  'JumpI X',
-]
-
 export function InstructionSetDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const t = useT()
   return (
@@ -111,11 +96,14 @@ export function InstructionSetDialog({ open, onOpenChange }: { open: boolean; on
           </tr>
         </thead>
         <tbody>
-          {MNEMONICS.map((m, i) => (
-            <tr key={m} className="border-b border-line/50">
-              <td className="py-1.5 pr-4 font-mono font-semibold whitespace-nowrap">{m}</td>
-              <td className="py-1.5 pr-4 font-mono">{hex(i, 1)}</td>
-              <td className="py-1.5">{t.isa.rows[i]}</td>
+          {isa.instructions.map((instruction, opcode) => (
+            <tr key={instruction.name} className="border-b border-line/50">
+              <td className="py-1.5 pr-4 font-mono font-semibold whitespace-nowrap">
+                {instruction.name}
+                {instruction.takesOperand && ' X'}
+              </td>
+              <td className="py-1.5 pr-4 font-mono">{hex(opcode, 1)}</td>
+              <td className="py-1.5">{t.isa.rows[opcode]}</td>
             </tr>
           ))}
         </tbody>
@@ -130,11 +118,6 @@ export function InstructionSetDialog({ open, onOpenChange }: { open: boolean; on
   )
 }
 
-const parseAddress = (text: string) => {
-  const value = Number.parseInt(text, 16)
-  return Number.isNaN(value) ? 0 : Math.min(0xfff, Math.max(0, value))
-}
-
 export function CoreDumpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title={useT().dump.title}>
@@ -146,12 +129,15 @@ export function CoreDumpDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 function CoreDump() {
   const t = useT()
   const program = simStore.use((s) => s.program)
+  const fileName = projectStore.use((s) => s.fileName)
   // Діапазон типово охоплює програму, як в оригіналі.
   const [from, setFrom] = useState(() => hex(program[0]?.address ?? 0, 3))
   const [to, setTo] = useState(() => hex(program.at(-1)?.address ?? 0xff, 3))
-  // Перераховується на кожен рендер: стан машини міг змінитися.
-  simStore.use((s) => s.snap)
-  const text = coreDump(projectStore.get().fileName, parseAddress(from), parseAddress(to))
+  const start = parseAddress(from) ?? 0
+  const end = parseAddress(to) ?? 0
+  // Дамп — знімок машини на момент відкриття діалогу чи зміни діапазону;
+  // у файл іде саме показаний текст.
+  const text = useMemo(() => coreDump(fileName, start, end), [fileName, start, end])
   const field = 'h-11 w-20 rounded-md border border-line bg-ed px-3 font-mono uppercase text-ed-fg'
 
   return (
@@ -165,11 +151,11 @@ function CoreDump() {
           {t.dump.to}
           <input className={field} value={to} maxLength={3} onChange={(e) => setTo(e.target.value)} />
         </label>
-        <button type="button" className={`${primary} ml-auto`} onClick={() => exportDump(parseAddress(from), parseAddress(to))}>
+        <button type="button" className={`${primary} ml-auto`} onClick={() => saveDump(text)}>
           {t.dump.save}
         </button>
       </div>
-      <pre className="max-h-[50dvh] overflow-auto rounded-md border border-line bg-ed p-4 font-mono text-[0.8125rem] leading-5 text-ed-fg">
+      <pre className="max-h-[50dvh] overflow-auto rounded-md border border-line bg-ed p-4 font-mono text-code leading-5 text-ed-fg">
         {text}
       </pre>
     </div>

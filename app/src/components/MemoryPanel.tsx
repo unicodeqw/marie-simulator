@@ -1,6 +1,5 @@
+import { hex, parseAddress } from '@/core/format'
 import { simStore } from '@/core/sim'
-import { hex } from '@/core/types'
-import { uiStore } from '@/core/ui'
 import { useT } from '@/i18n'
 import { memo, useEffect, useRef, useState } from 'react'
 import { cn } from './styles'
@@ -14,16 +13,16 @@ const grid = 'grid grid-cols-[3.25rem_repeat(16,minmax(0,1fr))] items-center tex
 const Row = memo(
   function Row({ row, memory, focusColumn }: { row: number; memory: Uint16Array; focusColumn: number }) {
     return (
-      <div className={cn(grid, 'h-[1.875rem]')}>
-        <div className="text-left font-semibold text-[#d9a441]">{hex(row * 16, 3)}</div>
+      <div className={cn(grid, 'h-7.5')}>
+        <div className="text-left font-semibold text-row-address">{hex(row * 16, 3)}</div>
         {COLUMNS.map((c) => {
           const word = memory[row * 16 + c]
           return (
             <div
               key={c}
               className={cn(
-                'rounded-[2px] leading-6',
-                c === focusColumn ? 'bg-amber font-bold text-[#1a1612]' : word === 0 ? 'text-[#8d867a]' : 'text-[#ede6d4]',
+                'rounded-xs leading-6',
+                c === focusColumn ? 'bg-amber font-bold text-on-lit' : word === 0 ? 'text-word-zero' : 'text-word',
               )}
             >
               {hex(word, 4)}
@@ -46,28 +45,27 @@ export function MemoryPanel() {
   const t = useT()
   const memory = simStore.use((s) => s.memory)
   const focus = simStore.use((s) => s.snap.focusCell)
-  const visible = uiStore.use((s) => s.tab === 'simulator')
+  const start = simStore.use((s) => s.program[0]?.address ?? null)
   const [goto, setGoto] = useState('')
   const box = useRef<HTMLDivElement>(null)
 
-  const scrollTo = (address: number, force: boolean) => {
+  // `always` прокручує, навіть якщо рядок уже видно (перехід за адресою).
+  const scrollTo = (address: number, always: boolean) => {
     const el = box.current
     const row = el?.children[address >> 4] as HTMLElement | undefined
     if (!el || !row) return
     const top = row.offsetTop - el.offsetTop
-    if (force || top < el.scrollTop || top + row.offsetHeight > el.scrollTop + el.clientHeight) {
+    if (always || top < el.scrollTop || top + row.offsetHeight > el.scrollTop + el.clientHeight) {
       el.scrollTop = Math.max(0, top - row.offsetHeight * 2)
     }
   }
 
   // Як в оригіналі: таблиця сама прокручується до комірки, з якою працює команда;
   // одразу після завантаження показує початок програми.
-  const start = simStore.use((s) => s.program[0]?.address ?? null)
   useEffect(() => {
-    if (!visible) return
     if (focus !== null) scrollTo(focus, false)
     else if (start !== null) scrollTo(start, true)
-  }, [focus, start, visible])
+  }, [focus, start])
 
   return (
     <section aria-label={t.memory.title} className="machine min-w-0 flex-[999_1_44rem]">
@@ -81,8 +79,8 @@ export function MemoryPanel() {
             className="flex items-center gap-2"
             onSubmit={(e) => {
               e.preventDefault()
-              const address = Number.parseInt(goto, 16)
-              if (!Number.isNaN(address)) scrollTo(Math.min(0xfff, Math.max(0, address)), true)
+              const address = parseAddress(goto)
+              if (address !== null) scrollTo(address, true)
             }}
           >
             <label htmlFor="mem-goto" className="silk tracking-widest">
@@ -94,7 +92,7 @@ export function MemoryPanel() {
               maxLength={3}
               autoComplete="off"
               spellCheck={false}
-              className="readout h-11 w-16 px-2.5 text-[0.9375rem] uppercase"
+              className="readout h-11 w-16 px-2.5 text-body uppercase"
               value={goto}
               placeholder="000"
               onChange={(e) => setGoto(e.target.value)}
@@ -103,14 +101,14 @@ export function MemoryPanel() {
         </div>
 
         <div className="overflow-x-auto">
-          <div className="min-w-[47.5rem] font-mono text-[0.8125rem]">
-            <div className={cn(grid, 'h-[1.625rem] border-b border-hair text-dim')} aria-hidden>
+          <div className="min-w-190 font-mono text-code">
+            <div className={cn(grid, 'h-6.5 border-b border-hair text-dim')} aria-hidden>
               <div />
               {COLUMNS.map((c) => (
                 <div key={c}>+{hex(c, 1)}</div>
               ))}
             </div>
-            <div ref={box} className="h-[20.625rem] overflow-y-auto">
+            <div ref={box} className="h-82.5 overflow-y-auto">
               {ROWS.map((row) => (
                 <Row key={row} row={row} memory={memory} focusColumn={focus !== null && focus >> 4 === row ? focus & 15 : -1} />
               ))}

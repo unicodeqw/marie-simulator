@@ -1,18 +1,18 @@
+import type { Dict } from '@/i18n'
 import * as datapath from './datapath'
+import { timestamp } from './format'
 import * as simulator from './sim'
 import { createStore } from './store'
-import { timestamp } from './types'
 import type { AssemblyReport, Program } from './types'
 import { assemble } from './wasm'
 
 export const UNTITLED = 'untitled.mas'
 
-/** Тимчасове сповіщення; текст дає словник i18n, `detail` — додаткові дані. */
+/** Тимчасове сповіщення; `text` дістає повідомлення зі словника поточної мови. */
 export interface Notice {
   id: number
   kind: 'error' | 'info'
-  key: 'assembled' | 'assemblyErrors' | 'mexImported' | 'mexFailed' | 'saved' | 'fileFailed'
-  detail?: string
+  text: (t: Dict) => string
 }
 
 interface ProjectState {
@@ -40,8 +40,8 @@ export const projectStore = createStore<ProjectState>({
 
 let noticeId = 0
 
-export function notify(kind: Notice['kind'], key: Notice['key'], detail?: string) {
-  projectStore.set({ notice: { id: ++noticeId, kind, key, detail } })
+export function notify(kind: Notice['kind'], text: Notice['text']) {
+  projectStore.set({ notice: { id: ++noticeId, kind, text } })
 }
 
 export function dismissNotice() {
@@ -76,11 +76,7 @@ export function assembleProject(): AssemblyReport {
   const report = assemble(source, fileName, timestamp())
   projectStore.set({ report, stale: false })
   if (report.program && report.program.lines.length > 0) loadProgram(report.program)
-  if (report.errorCount > 0) notify('error', 'assemblyErrors', String(report.errorCount))
-  else notify('info', 'assembled')
+  if (report.errorCount > 0) notify('error', (t) => t.editor.failed(report.errorCount))
+  else notify('info', (t) => t.editor.assembled)
   return report
-}
-
-export function baseName(fileName: string) {
-  return fileName.replace(/\.[^.]*$/, '')
 }

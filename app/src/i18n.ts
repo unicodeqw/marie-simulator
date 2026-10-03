@@ -1,5 +1,4 @@
 import type { Example } from './core/examples'
-import type { Notice } from './core/project'
 import type { AsmError, Fault, Status } from './core/types'
 import { useSettings } from './settings'
 
@@ -44,7 +43,8 @@ const uk = {
     symbol: 'Символ',
     address: 'Адреса',
     references: 'Посилання',
-    line: (n: number) => `рядок ${n}`,
+    assembled: 'Асемблювання успішне.',
+    failed: (errors: number) => `Асемблювання неуспішне, помилок: ${errors}.`,
   },
   registers: {
     pc: 'лічильник команд',
@@ -67,9 +67,8 @@ const uk = {
     reload: 'Завантажити',
     reset: 'Скидання',
     delay: 'Затримка',
-    noDelay: 'без затримки',
-    ms: (n: number) => `${n} мс`,
-    seconds: (n: number) => `${n.toLocaleString('uk')} с`,
+    delayValue: (ms: number) =>
+      ms === 0 ? 'без затримки' : ms < 1000 ? `${ms} мс` : `${(ms / 1000).toLocaleString('uk')} с`,
     lamps: { running: 'Робота', paused: 'Пауза', input: 'Ввід', halted: 'Зупин', fault: 'Помилка' },
     restartHint: 'Повернути лічильник команд на початок програми',
     reloadHint: 'Завантажити програму в пам\'ять заново',
@@ -106,7 +105,7 @@ const uk = {
     subtitle: '000–FFF · 16 слів у рядку',
     goto: 'Перейти до адреси',
   },
-  dump: { title: 'Дамп пам\'яті', from: 'Від адреси', to: 'До адреси', save: 'Зберегти .dmp', close: 'Закрити' },
+  dump: { title: 'Дамп пам\'яті', from: 'Від адреси', to: 'До адреси', save: 'Зберегти .dmp' },
   datapath: {
     subtitle: 'мнемосхема тракту даних · рівень регістрових передач',
     controlUnit: 'Пристрій керування',
@@ -156,14 +155,12 @@ const uk = {
     undefinedOperand: 'Операнд не визначено: такої мітки немає.',
     tooManyLines: 'Програма не вміщується в пам\'ять. Асемблювання зупинено.',
   } satisfies Record<AsmError, string>,
-  notice: {
-    assembled: (_detail: string) => 'Асемблювання успішне.',
-    assemblyErrors: (n: string) => `Асемблювання неуспішне, помилок: ${n}.`,
-    mexImported: (name: string) => `Імпортовано ${name}.`,
-    mexFailed: (detail: string) => `Не вдалося відкрити файл: ${detail}`,
+  files: {
+    imported: (name: string) => `Імпортовано ${name}.`,
+    openFailed: (detail: string) => `Не вдалося відкрити файл: ${detail}`,
     saved: (name: string) => `Збережено ${name}.`,
-    fileFailed: (detail: string) => `Не вдалося зберегти файл: ${detail}`,
-  } satisfies Record<Notice['key'], (detail: string) => string>,
+    saveFailed: (detail: string) => `Не вдалося зберегти файл: ${detail}`,
+  },
   about: {
     text: 'Симулятор навчальної ЕОМ MARIE: редактор, асемблер, виконання програм і анімація тракту даних.',
     original:
@@ -203,7 +200,7 @@ const uk = {
   confirm: 'Продовжити',
 }
 
-type Dict = typeof uk
+export type Dict = typeof uk
 
 const en: Dict = {
   appName: 'MARIE Simulator',
@@ -244,7 +241,8 @@ const en: Dict = {
     symbol: 'Symbol',
     address: 'Address',
     references: 'References',
-    line: (n) => `line ${n}`,
+    assembled: 'Assembly successful.',
+    failed: (errors) => `${errors} error(s) found.  Assembly unsuccessful.`,
   },
   registers: {
     pc: 'program counter',
@@ -267,9 +265,7 @@ const en: Dict = {
     reload: 'Reload',
     reset: 'Reset',
     delay: 'Delay',
-    noDelay: 'no delay',
-    ms: (n) => `${n} ms`,
-    seconds: (n) => `${n.toLocaleString('en')} s`,
+    delayValue: (ms) => (ms === 0 ? 'no delay' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toLocaleString('en')} s`),
     lamps: { running: 'Run', paused: 'Pause', input: 'Input', halted: 'Halt', fault: 'Fault' },
     restartHint: 'Set the program counter back to the first statement',
     reloadHint: 'Load the program into memory again',
@@ -306,7 +302,7 @@ const en: Dict = {
     subtitle: '000–FFF · 16 words per row',
     goto: 'Go to address',
   },
-  dump: { title: 'Core dump', from: 'From address', to: 'To address', save: 'Save .dmp', close: 'Close' },
+  dump: { title: 'Core dump', from: 'From address', to: 'To address', save: 'Save .dmp' },
   datapath: {
     subtitle: 'datapath mimic diagram · register transfer level',
     controlUnit: 'Control unit',
@@ -356,13 +352,11 @@ const en: Dict = {
     undefinedOperand: 'Operand undefined.',
     tooManyLines: 'Maximum line number exceeded.  Assembly halted.',
   },
-  notice: {
-    assembled: () => 'Assembly successful.',
-    assemblyErrors: (n) => `${n} error(s) found.  Assembly unsuccessful.`,
-    mexImported: (name) => `Imported ${name}.`,
-    mexFailed: (detail) => `Could not open the file: ${detail}`,
+  files: {
+    imported: (name) => `Imported ${name}.`,
+    openFailed: (detail) => `Could not open the file: ${detail}`,
     saved: (name) => `Saved ${name}.`,
-    fileFailed: (detail) => `Could not save the file: ${detail}`,
+    saveFailed: (detail) => `Could not save the file: ${detail}`,
   },
   about: {
     text: 'Simulator of the MARIE teaching computer: editor, assembler, program execution and datapath animation.',

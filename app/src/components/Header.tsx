@@ -1,14 +1,14 @@
 import { EXAMPLES } from '@/core/examples'
 import { discarding, exportListing, exportMap, loadExample, newFile, openProject, saveProject } from '@/core/fileActions'
-import { dismissNotice, projectStore } from '@/core/project'
-import type { Tab } from '@/core/ui'
+import { projectStore } from '@/core/project'
 import { useT } from '@/i18n'
 import { updateSettings, useSettings } from '@/settings'
-import { ChevronDown, Moon, Sun, X } from 'lucide-react'
+import { ChevronDown, Moon, Sun } from 'lucide-react'
 import { DropdownMenu } from 'radix-ui'
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { cn } from './styles'
 
+export type Tab = 'editor' | 'simulator' | 'datapath'
 export type DialogName = 'about' | 'isa' | 'dump'
 
 const TABS: Tab[] = ['editor', 'simulator', 'datapath']
@@ -141,42 +141,9 @@ export function Header({
           title={t.menu.theme}
           onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })}
         >
-          {theme === 'dark' ? <Sun className="size-[1.125rem]" /> : <Moon className="size-[1.125rem]" />}
+          {theme === 'dark' ? <Sun className="size-4.5" /> : <Moon className="size-4.5" />}
         </button>
       </div>
     </header>
-  )
-}
-
-/** Сповіщення про асемблювання та файлові дії; інформаційні зникають самі. */
-export function NoticeBar() {
-  const t = useT()
-  const notice = projectStore.use((s) => s.notice)
-
-  useEffect(() => {
-    if (notice?.kind !== 'info') return
-    const timer = window.setTimeout(dismissNotice, 4000)
-    return () => window.clearTimeout(timer)
-  }, [notice])
-
-  if (!notice) return null
-  return (
-    <div
-      role={notice.kind === 'error' ? 'alert' : 'status'}
-      className={cn(
-        'flex items-center justify-between gap-4 border-b border-line bg-chrome px-5 py-1 font-medium',
-        notice.kind === 'error' ? 'text-ed-err' : 'text-ed-ok',
-      )}
-    >
-      {t.notice[notice.key](notice.detail ?? '')}
-      <button
-        type="button"
-        className="flex size-11 items-center justify-center rounded-md text-chrome-fg hover:bg-line/30"
-        aria-label={t.close}
-        onClick={dismissNotice}
-      >
-        <X className="size-4" />
-      </button>
-    </div>
   )
 }

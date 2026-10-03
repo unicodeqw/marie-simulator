@@ -1,10 +1,10 @@
 import { openFile, saveTextFile } from '@/platform/files'
 import type { FileFilter } from '@/platform/files'
 import { ask } from './confirm'
-import { dpStore } from './datapath'
+import { traceText } from './datapath'
 import type { Example } from './examples'
-import { UNTITLED, baseName, loadProgram, markSaved, notify, openSource, projectStore } from './project'
-import { coreDump } from './sim'
+import { baseName } from './format'
+import { UNTITLED, loadProgram, markSaved, notify, openSource, projectStore } from './project'
 import { readMex } from './wasm'
 
 const SOURCE: FileFilter = { name: 'MARIE Source', extensions: ['mas'] }
@@ -48,22 +48,22 @@ export async function openProject() {
       const mex = readMex(file.bytes)
       openSource(`${baseName(file.name)}.mas`, mex.source)
       loadProgram(mex.program)
-      notify('info', 'mexImported', file.name)
+      notify('info', (t) => t.files.imported(file.name))
     } else {
       openSource(file.name, decode(file.bytes), file.path)
     }
   } catch (e) {
-    notify('error', 'mexFailed', message(e))
+    notify('error', (t) => t.files.openFailed(message(e)))
   }
 }
 
 async function save(text: string, name: string, filter: FileFilter, path: string | null = null) {
   try {
     const saved = await saveTextFile(text, name, filter, path)
-    if (saved) notify('info', 'saved', saved.name)
+    if (saved) notify('info', (t) => t.files.saved(saved.name))
     return saved
   } catch (e) {
-    notify('error', 'fileFailed', message(e))
+    notify('error', (t) => t.files.saveFailed(message(e)))
     return null
   }
 }
@@ -84,13 +84,10 @@ export function exportMap() {
   if (report?.map) return save(report.map, `${baseName(fileName)}.map`, MAP)
 }
 
-export function exportDump(start: number, end: number) {
-  const { fileName } = projectStore.get()
-  return save(coreDump(fileName, start, end), `${baseName(fileName)}.dmp`, DUMP)
+export function saveDump(text: string) {
+  return save(text, `${baseName(projectStore.get().fileName)}.dmp`, DUMP)
 }
 
 export function exportTrace() {
-  const { fileName } = projectStore.get()
-  const header = '  IR   OUT    IN    AC   MBR   PC   MAR'
-  return save([header, ...dpStore.get().trace, ''].join('\n'), `${baseName(fileName)}-trace.txt`, TEXT)
+  return save(traceText(), `${baseName(projectStore.get().fileName)}-trace.txt`, TEXT)
 }

@@ -29,6 +29,16 @@
   --color-ed-ok: var(--ed-ok);
   --color-ed-err: var(--ed-err);
 
+  --radius-plate: 3px;
+  --radius-case: 10px;
+
+  --text-2xs: 0.625rem;
+  --text-silk: 0.6875rem;
+  --text-listing: 0.78125rem;
+  --text-code: 0.8125rem;
+  --text-body: 0.9375rem;
+  --text-print: 1.0625rem;
+
   /* Панель машини — однакова в обох темах. */
   --color-case: #2b2927;
   --color-panel: #141312;
@@ -45,14 +55,23 @@
   --color-key-ochre: #c4902f;
   --color-key-rust: #9a4e33;
   --color-key-cream: #e4dcc6;
+  /* Темний текст на освітлених і охристих поверхнях. */
+  --color-on-lit: #1a1612;
+  --color-word: #ede6d4;
+  --color-word-zero: #8d867a;
+  --color-row-address: #d9a441;
 
   /* Телетайп. */
   --color-tty: #cfc8b2;
   --color-tty-slot: #3a3833;
   --color-tty-rule: #a39c86;
   --color-tty-key: #3f443c;
+  --color-tty-key-edge: #1e211c;
   --color-paper: #f3eedd;
   --color-ink: #2a2620;
+  --color-tty-dim: #4a453b;
+  --color-tty-hint: #5c564a;
+  --color-paper-rule: #c9c2ac;
 
   /* Перфопапір лістингу. */
   --color-fanfold: #f5f2e6;
@@ -72,6 +91,9 @@
   --color-cu: #f2b8a6;
   --color-cu-off: #3a2c29;
   --color-node: #26231d;
+  --color-alu-off: #4a4435;
+  --color-write-code: #ff8a7e;
+  --color-read-code: #a9c3e6;
 }
 
 :root {
@@ -133,7 +155,7 @@ button:disabled {
   /* Корпус і чорна панель із шовкографією. */
   .machine {
     background: var(--color-case);
-    border-radius: 10px;
+    border-radius: var(--radius-case);
     padding: 0.75rem;
     box-shadow: 0 3px 0 #000;
   }
@@ -148,7 +170,7 @@ button:disabled {
   .silk {
     font-family: var(--font-condensed);
     font-weight: 600;
-    font-size: 0.6875rem;
+    font-size: var(--text-silk);
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
@@ -167,7 +189,7 @@ button:disabled {
   .readout {
     background: var(--color-well);
     border: 1px solid var(--color-hair);
-    border-radius: 3px;
+    border-radius: var(--radius-plate);
     color: var(--color-amber);
     font-family: var(--font-mono);
     font-weight: 500;
@@ -220,7 +242,7 @@ button:disabled {
   height: 100%;
   background: var(--ed);
   color: var(--ed-fg);
-  font-size: 0.9375rem;
+  font-size: var(--text-body);
 }
 
 .cm-editor.cm-focused {

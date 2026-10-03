@@ -12,11 +12,11 @@ import {
   step,
   stop,
 } from '@/core/sim'
-import { formatWord, type RegisterName } from '@/core/types'
+import type { RegisterName } from '@/core/types'
+import { formatWord, isa } from '@/core/wasm'
 import { useT } from '@/i18n'
-import { Lamp, LampRow, PaddleKey, RadixButton, StatusLine } from './hardware'
-import { StatusText } from './status'
-import { formatDelay } from './styles'
+import { DelaySlider, Lamp, LampRow, PaddleKey, RadixButton, StatusLine } from './hardware'
+import { cn } from './styles'
 
 const REGISTERS: { name: RegisterName; width: 12 | 16 }[] = [
   { name: 'pc', width: 12 },
@@ -26,25 +26,24 @@ const REGISTERS: { name: RegisterName; width: 12 | 16 }[] = [
   { name: 'ir', width: 16 },
 ]
 
-const OPCODES = ['JNS', 'LOAD', 'STORE', 'ADD', 'SUBT', 'INPUT', 'OUTPUT', 'HALT', 'SKIPCOND', 'JUMP', 'CLEAR', 'ADDI', 'JUMPI']
+// Ширина колонки з підписами ліворуч від ламп.
+const LEGEND = 'w-44 flex-none'
 
 function RegisterRow({ name, width }: { name: RegisterName; width: 12 | 16 }) {
   const t = useT()
   const value = simStore.use((s) => s.snap[name])
   const radix = simStore.use((s) => s.registerRadix[name])
   const label = name.toUpperCase()
+  const text = formatWord(value, radix, width === 12)
   return (
     <div className="flex items-center border-t border-hair">
-      <div className="flex w-44 flex-none items-baseline gap-2">
-        <span className="w-[2.375rem] font-condensed text-lg font-bold tracking-wider">{label}</span>
+      <div className={cn(LEGEND, 'flex items-baseline gap-2')}>
+        <span className="w-9.5 font-condensed text-lg font-bold tracking-wider">{label}</span>
         <span className="silk font-medium text-dim">{t.registers[name]}</span>
       </div>
       <LampRow value={value} width={width} />
-      <div
-        className="readout ml-4 flex h-8 w-[5.5rem] items-center justify-end px-2.5 text-lg tracking-wider"
-        aria-label={`${label} ${formatWord(value, radix, width === 12 ? 3 : 4)}`}
-      >
-        {formatWord(value, radix, width === 12 ? 3 : 4)}
+      <div className="readout ml-4 flex h-8 w-22 items-center justify-end px-2.5 text-lg tracking-wider" aria-label={`${label} ${text}`}>
+        {text}
       </div>
       <div className="ml-2">
         <RadixButton name={label} radix={radix} onChange={(r) => setRegisterRadix(name, r)} />
@@ -56,12 +55,12 @@ function RegisterRow({ name, width }: { name: RegisterName; width: 12 | 16 }) {
 function LampStrip({ title, width, lamps }: { title: string; width: string; lamps: { label: string; on: boolean }[] }) {
   return (
     <div className="flex items-center pt-3.5">
-      <div className="silk w-44 flex-none text-xs tracking-[0.12em] text-dim">{title}</div>
+      <div className={cn(LEGEND, 'silk text-xs tracking-[0.12em] text-dim')}>{title}</div>
       <div className="flex">
         {lamps.map((l) => (
-          <div key={l.label} className={`flex ${width} flex-col items-center gap-1.5`}>
+          <div key={l.label} className={cn('flex flex-col items-center gap-1.5', width)}>
             <Lamp on={l.on} />
-            <span className="silk text-[0.625rem] tracking-wide">{l.label}</span>
+            <span className="silk text-2xs tracking-wide">{l.label}</span>
           </div>
         ))}
       </div>
@@ -80,11 +79,11 @@ function Lamps() {
       <LampStrip
         title={t.panel.instruction}
         width="w-12"
-        lamps={OPCODES.map((label, i) => ({ label, on: i === opcode }))}
+        lamps={isa.instructions.map((instruction, i) => ({ label: instruction.name, on: i === opcode }))}
       />
       <LampStrip
         title={t.panel.state}
-        width="w-[4.875rem]"
+        width="w-19.5"
         lamps={[
           { label: t.panel.lamps.running, on: running !== null && state === 'ready' },
           { label: t.panel.lamps.paused, on: state === 'paused' },
@@ -118,26 +117,7 @@ function Controls() {
           if (await ask('reset')) reset()
         }}
       />
-      <div className="ml-auto flex min-w-56 flex-col gap-1.5">
-        <label htmlFor="sim-delay" className="silk flex justify-between">
-          <span>{t.panel.delay}</span>
-          <span className="font-mono tracking-normal text-amber normal-case">{formatDelay(delay, t)}</span>
-        </label>
-        <input
-          id="sim-delay"
-          type="range"
-          className="slider"
-          min={DELAY_MIN}
-          max={DELAY_MAX}
-          step={10}
-          value={delay}
-          onChange={(e) => setDelay(Number(e.target.value))}
-        />
-        <div className="flex justify-between font-mono text-[0.625rem] text-dim" aria-hidden>
-          <span>0</span>
-          <span>{t.panel.seconds(DELAY_MAX / 1000)}</span>
-        </div>
-      </div>
+      <DelaySlider id="sim-delay" label={t.panel.delay} value={delay} min={DELAY_MIN} max={DELAY_MAX} step={10} onChange={setDelay} />
     </div>
   )
 }
@@ -154,11 +134,11 @@ export function FrontPanel() {
         </div>
 
         <div className="overflow-x-auto">
-          <div className="flex min-w-[50rem] flex-col">
+          <div className="flex min-w-200 flex-col">
             <div className="flex items-center" aria-hidden>
-              <div className="w-44 flex-none" />
+              <div className={LEGEND} />
               {Array.from({ length: 16 }, (_, i) => (
-                <span key={i} className="flex h-[1.375rem] w-[1.875rem] items-center justify-center font-mono text-[0.625rem] font-medium text-dim">
+                <span key={i} className="flex h-5.5 w-7.5 items-center justify-center font-mono text-2xs font-medium text-dim">
                   {15 - i}
                 </span>
               ))}
@@ -172,9 +152,7 @@ export function FrontPanel() {
         </div>
 
         <Controls />
-        <StatusLine>
-          <StatusText status={status} />
-        </StatusLine>
+        <StatusLine status={status} />
       </div>
     </section>
   )

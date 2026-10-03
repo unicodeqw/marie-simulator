@@ -2,17 +2,17 @@ import { useEffect, useState } from 'react'
 import { DataPathView } from './components/DataPathView'
 import { AboutDialog, ConfirmHost, CoreDumpDialog, InstructionSetDialog } from './components/dialogs'
 import { EditorView } from './components/EditorView'
-import { Header, NoticeBar, type DialogName } from './components/Header'
+import { Header, type DialogName, type Tab } from './components/Header'
+import { NoticeBar } from './components/NoticeBar'
 import { SimulatorView } from './components/SimulatorView'
+import { confirmStore } from './core/confirm'
 import * as datapath from './core/datapath'
 import { discarding, openProject, saveProject } from './core/fileActions'
 import { assembleProject, projectStore } from './core/project'
 import * as simulator from './core/sim'
-import { uiStore, type Tab } from './core/ui'
 
 export default function App() {
-  const tab = uiStore.use((s) => s.tab)
-  const setTab = (tab: Tab) => uiStore.set({ tab })
+  const [tab, setTab] = useState<Tab>('editor')
   const [dialog, setDialog] = useState<DialogName | null>(null)
   const closeDialog = (open: boolean) => !open && setDialog(null)
   useHotkeys(tab, dialog !== null, setDialog)
@@ -21,17 +21,14 @@ export default function App() {
     <div className="flex min-h-dvh flex-col">
       <Header tab={tab} onTab={setTab} onDialog={setDialog} />
       <NoticeBar />
-      {/* Усі розділи змонтовано постійно, щоб редактор і машини не втрачали стан. */}
-      <main className="mx-auto w-full max-w-[90rem] p-5">
+      <main className="mx-auto w-full max-w-360 p-5">
+        {/* Редактор лишається змонтованим, щоб не втрачати історію правок і курсор;
+            стан машин живе у сховищах, тож їхні екрани монтуються за потреби. */}
         <div hidden={tab !== 'editor'}>
           <EditorView />
         </div>
-        <div hidden={tab !== 'simulator'}>
-          <SimulatorView />
-        </div>
-        <div hidden={tab !== 'datapath'}>
-          <DataPathView />
-        </div>
+        {tab === 'simulator' && <SimulatorView />}
+        {tab === 'datapath' && <DataPathView />}
       </main>
       <AboutDialog open={dialog === 'about'} onOpenChange={closeDialog} />
       <InstructionSetDialog open={dialog === 'isa'} onOpenChange={closeDialog} />
@@ -43,29 +40,25 @@ export default function App() {
 
 function useHotkeys(tab: Tab, dialogOpen: boolean, setDialog: (name: DialogName) => void) {
   useEffect(() => {
+    const run = () => (tab === 'datapath' ? datapath.run() : simulator.run('run'))
+    const machine = tab === 'datapath' ? datapath : tab === 'simulator' ? simulator : null
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.altKey || dialogOpen || document.querySelector('[role="menu"], [role="alertdialog"]')) return
-      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
+      if (e.altKey || dialogOpen || confirmStore.get().question !== null) return
 
+      let action: (() => void) | undefined
       if (e.ctrlKey || e.metaKey) {
-        if (key === 'o') discarding(openProject)
-        else if (key === 's') saveProject(e.shiftKey)
-        else return
-        e.preventDefault()
-        return
-      }
+        const key = e.key.toLowerCase()
+        if (key === 'o') action = () => discarding(openProject)
+        else if (key === 's') action = () => saveProject(e.shiftKey)
+      } else if (e.key === 'F1') action = () => setDialog('isa')
+      else if (e.key === 'F9') action = assembleProject
+      else if (e.key === 'F5' && machine) action = e.shiftKey ? machine.stop : run
+      else if (e.key === 'F10' && machine) action = machine.step
 
-      const machine = tab === 'datapath' ? datapath : tab === 'simulator' ? simulator : null
-      const handlers: Record<string, (() => void) | undefined> = {
-        F1: () => setDialog('isa'),
-        F9: assembleProject,
-        F5: machine ? (e.shiftKey ? machine.stop : () => (tab === 'datapath' ? datapath.run() : simulator.run('run'))) : undefined,
-        F10: machine?.step,
-      }
-      const handler = handlers[key]
-      if (!handler) return
+      if (!action) return
       e.preventDefault()
-      handler()
+      action()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
