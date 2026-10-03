@@ -3,7 +3,7 @@ resolver = "2"
 members = ["sim-core", "sim-wasm", "app/src-tauri"]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 

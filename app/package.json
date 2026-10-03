@@ -1,7 +1,7 @@
 {
   "name": "marie-simulator",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "wasm": "wasm-pack build ../sim-wasm --target web --out-dir ../app/src/core/pkg --release --no-pack",
