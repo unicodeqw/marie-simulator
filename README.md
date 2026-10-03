@@ -4,6 +4,12 @@
 
 Це порт MarieSim v1.3.01 і MarieDPath (Linda Null, Julia Lobur, «The Essentials of Computer Organization and Architecture»). Поведінку ядра звірено з Java-сирцями оригіналу. Файли програм `.mas` сумісні з оригіналом; старі `.mex` можна відкрити.
 
+- **Веб-версія без встановлення:** https://unicodeqw.github.io/marie-simulator/
+- **Десктоп (Windows, macOS, Linux):** інсталятори на сторінці [Releases](https://github.com/unicodeqw/marie-simulator/releases/latest)
+- **Без встановлення:** на Windows `*_x64_portable.exe` запускається одразу (потрібен WebView2, він уже є в Windows 10 і 11), на Linux — `*.AppImage`
+
+Інсталятори не підписані сертифікатом розробника. Windows SmartScreen попередить про невідомого видавця: натисніть «Докладніше», потім «Однаково запустити». На macOS відкрийте програму правим кліком і пунктом «Відкрити».
+
 ## Інтерфейс
 
 Інтерфейс зроблено за мотивами міні-ЕОМ PDP-8/I з телетайпом ASR-33. Три розділи:
