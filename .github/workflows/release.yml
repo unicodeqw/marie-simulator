@@ -1,0 +1,88 @@
+# Збирає десктопні інсталятори для Windows, macOS і Linux та додає їх до
+# GitHub Release. Запускається тегом v* (наприклад, v1.0.0) або вручну.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ''
+            rust-targets: wasm32-unknown-unknown
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            rust-targets: wasm32-unknown-unknown,aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            rust-targets: wasm32-unknown-unknown,x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ''
+            rust-targets: wasm32-unknown-unknown
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Системні бібліотеки для Linux
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Залежності фронтенду
+        working-directory: app
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
+          releaseName: MARIE Simulator ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
+          releaseBody: |
+            Симулятор навчальної ЕОМ MARIE до лабораторних робіт з курсу «Архітектура комп'ютерів»: редактор, асемблер, виконання програм і тракт даних.
+
+            **Веб-версія без встановлення:** https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+
+            | ОС | Файл |
+            |---|---|
+            | Windows | `*_x64-setup.exe` або `*_x64_en-US.msi` |
+            | Windows без встановлення | `*_x64_portable.exe` (потрібен WebView2, він уже є в Windows 10 і 11) |
+            | macOS (Apple Silicon) | `*_aarch64.dmg` |
+            | macOS (Intel) | `*_x64.dmg` |
+            | Linux | `*.AppImage`, `*.deb` або `*.rpm` |
+
+            Інсталятори не підписані сертифікатом розробника. Windows SmartScreen може попередити про невідомого видавця (натисніть «Докладніше» → «Однаково запустити»). На macOS відкрийте програму через правий клік → «Відкрити».
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  # Portable .exe для Windows додається до того самого релізу після інсталяторів.
+  portable:
+    needs: build
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/portable.yml
+    with:
+      tag: ${{ github.ref_name }}

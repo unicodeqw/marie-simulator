@@ -1,0 +1,54 @@
+# Portable-версія для Windows: один .exe без інсталятора (фронтенд і WASM
+# вшиті в бінарник). Потрібен WebView2, який уже є в Windows 10 і 11.
+# Викликається з Release для кожного тегу або вручну для вже наявного релізу.
+name: Portable
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Тег релізу, наприклад v1.0.0
+        required: true
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Збірка без інсталятора
+        working-directory: app
+        run: |
+          npm ci
+          npx tauri build --no-bundle
+
+      - name: Завантаження в реліз
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          name="MARIE.Simulator_${TAG#v}_x64_portable.exe"
+          cp target/release/marie-simulator.exe "$name"
+          gh release upload "$TAG" "$name" --clobber
