@@ -35,11 +35,11 @@ function marieLanguage() {
   })
 }
 
+// Екран монохромний: числа лишаються звичайним текстом.
 const highlight = HighlightStyle.define([
   { tag: tags.comment, class: 'tok-comment' },
   { tag: tags.keyword, class: 'tok-mnemonic' },
   { tag: tags.labelName, class: 'tok-label' },
-  { tag: tags.number, class: 'tok-number' },
 ])
 
 function CodeEditor() {
@@ -101,22 +101,28 @@ function CodeEditor() {
   return <div ref={host} className="min-h-110 flex-1 overflow-hidden" />
 }
 
+/** Рядок стану внизу екрана; після асемблювання — інверсним відео. */
 function Result() {
   const t = useT()
   const report = projectStore.use((s) => s.report)
   const stale = projectStore.use((s) => s.stale)
-  if (!report) return <span className="text-ed-dim">{t.noListing}</span>
+  const bar = 'flex flex-wrap justify-between gap-x-4 gap-y-1 px-5.5 py-1 font-mono text-code font-semibold'
+  if (!report) {
+    return (
+      <div role="status" className={cn(bar, 'font-normal text-phosphor-dim')}>
+        {t.noListing}
+      </div>
+    )
+  }
   const ok = report.errorCount === 0
   return (
-    <>
-      <span className={cn('font-semibold', ok ? 'text-ed-ok' : 'text-ed-err')}>
-        {ok ? t.editor.assembled : t.editor.failed(report.errorCount)}
-      </span>
-      <span className="text-ed-dim">
+    <div role="status" className={cn(bar, 'crt-inverse')} data-tone={ok ? undefined : 'error'}>
+      <span>{ok ? t.editor.assembled : t.editor.failed(report.errorCount)}</span>
+      <span>
         {stale && `${t.editor.stale} · `}
         {t.editor.words(report.program?.lines.length ?? 0)} · {t.editor.symbols(report.symbols.length)}
       </span>
-    </>
+    </div>
   )
 }
 
@@ -171,18 +177,22 @@ export function EditorView() {
   const t = useT()
   const fileName = projectStore.use((s) => s.fileName)
   const dirty = projectStore.use((s) => s.dirty)
-  const tool = 'h-11 rounded-md border border-line px-3.5 hover:bg-line/30'
+  const tool = 'btn-cream px-3.5'
 
   return (
-    <div className="flex flex-wrap items-start gap-4">
-      <section
-        aria-label={t.tabs.editor}
-        className="flex min-w-0 flex-[999_1_38.75rem] flex-col overflow-hidden rounded-lg border border-line bg-ed text-ed-fg"
-      >
-        <div className="flex flex-wrap items-center gap-2 border-b border-line px-3.5 py-2.5">
-          <div className="mr-2 font-mono text-sm font-semibold">
+    <div className="flex flex-wrap items-start gap-7">
+      {/* Термінал: екран із кодом, під ним — наклейка з назвою файлу та клавіші. */}
+      <section aria-label={t.tabs.editor} className="putty flex min-w-0 flex-[999_1_38.75rem] flex-col rounded-[1.375rem] px-5 pt-5 pb-4">
+        <div className="crt-bezel rounded-[30px/26px] p-4">
+          <div className="crt flex flex-col rounded-[20px/18px] pt-3.5 pb-3">
+            <CodeEditor />
+            <Result />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 px-1 pt-4 pb-1">
+          <div className="dymo mr-1 px-2.5 py-1 font-mono text-code font-semibold tracking-[0.12em]">
             {fileName}
-            {dirty && <span className="ml-2 font-normal text-ed-dim">({t.editor.modified})</span>}
+            {dirty && <span className="ml-2 font-normal">({t.editor.modified})</span>}
           </div>
           <button type="button" className={tool} onClick={() => discarding(newFile)}>
             {t.menu.new}
@@ -196,19 +206,15 @@ export function EditorView() {
           <button
             type="button"
             title={`${t.editor.assemble} (F9)`}
-            className="ml-auto h-11 rounded-md bg-key-ochre px-5 font-semibold text-on-lit shadow-[inset_0_-4px_0_rgb(0_0_0/0.2)] hover:brightness-110"
+            className="btn-ochre ml-auto h-11.5 px-5.5 font-semibold"
             onClick={assembleProject}
           >
             {t.editor.assemble}
           </button>
         </div>
-        <CodeEditor />
-        <div role="status" className="flex flex-wrap justify-between gap-2 border-t border-line px-3.5 py-2.5 font-mono text-code">
-          <Result />
-        </div>
       </section>
 
-      <div className="flex min-w-0 flex-[1_1_30rem] flex-col gap-4">
+      <div className="flex min-w-0 flex-[1_1_30rem] flex-col gap-7.5">
         <Listing />
         <Symbols />
       </div>

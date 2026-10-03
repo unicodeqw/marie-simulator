@@ -8,6 +8,8 @@
 @import '@fontsource/ibm-plex-mono/400.css';
 @import '@fontsource/ibm-plex-mono/500.css';
 @import '@fontsource/ibm-plex-mono/600.css';
+@import '@fontsource/ibm-plex-mono/700.css';
+@import '@fontsource/doto/900.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -15,22 +17,18 @@
   --font-sans: 'IBM Plex Sans', 'Helvetica Neue', sans-serif;
   --font-condensed: 'IBM Plex Sans Condensed', 'Arial Narrow', sans-serif;
   --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+  /* Точкові індикатори; символів поза латиницею в шрифті немає, тому запасний — моноширинний. */
+  --font-led: 'Doto', 'IBM Plex Mono', monospace;
 
-  /* «Стіл» і шапка — залежать від теми. */
-  --color-desk: var(--desk);
+  /* Меню, діалоги та сповіщення — залежать від теми. */
   --color-chrome: var(--chrome);
   --color-chrome-fg: var(--chrome-fg);
   --color-line: var(--line);
-  --color-tab: var(--tab);
-  --color-tab-fg: var(--tab-fg);
   --color-ed: var(--ed);
   --color-ed-fg: var(--ed-fg);
   --color-ed-dim: var(--ed-dim);
   --color-ed-ok: var(--ed-ok);
   --color-ed-err: var(--ed-err);
-
-  --radius-plate: 3px;
-  --radius-case: 10px;
 
   --text-2xs: 0.625rem;
   --text-silk: 0.6875rem;
@@ -40,33 +38,23 @@
   --text-print: 1.0625rem;
 
   /* Панель машини — однакова в обох темах. */
-  --color-case: #2b2927;
-  --color-panel: #141312;
-  --color-hair: #5a554b;
-  --color-edge: #6b6455;
+  --color-hair: rgb(233 226 208 / 0.3);
   --color-legend: #e9e2d0;
   --color-dim: #b9b19d;
-  --color-well: #0a0908;
   --color-amber: #ffc65c;
-  --color-lamp: #ffe3a1;
-  --color-lamp-off: #2a2018;
+  --color-led: #ffb648;
   --color-band-rust: #7a3f2a;
   --color-band-ochre: #a87b25;
   --color-key-ochre: #c4902f;
-  --color-key-rust: #9a4e33;
-  --color-key-cream: #e4dcc6;
   /* Темний текст на освітлених і охристих поверхнях. */
   --color-on-lit: #1a1612;
-  --color-word: #ede6d4;
-  --color-word-zero: #8d867a;
-  --color-row-address: #d9a441;
+
+  /* Люмінофор ЕЛТ: один колір, три яскравості. */
+  --color-phosphor: #ffc56a;
+  --color-phosphor-hi: #ffe0a6;
+  --color-phosphor-dim: #c2883a;
 
   /* Телетайп. */
-  --color-tty: #cfc8b2;
-  --color-tty-slot: #3a3833;
-  --color-tty-rule: #a39c86;
-  --color-tty-key: #3f443c;
-  --color-tty-key-edge: #1e211c;
   --color-paper: #f3eedd;
   --color-ink: #2a2620;
   --color-tty-dim: #4a453b;
@@ -74,65 +62,73 @@
   --color-paper-rule: #c9c2ac;
 
   /* Перфопапір лістингу. */
-  --color-fanfold: #f5f2e6;
-  --color-bar: #e2eedb;
+  --color-bar: rgb(196 224 190 / 0.55);
   --color-fan-ink: #23302a;
   --color-fan-rule: #b9c4b4;
   --color-fan-dim: #4c5a52;
-  --color-cursor-row: #f2cc6e;
   --color-bp: #b2321c;
-  --color-bp-ring: #7c897f;
 
   /* Мнемосхема тракту даних. */
-  --color-bus: #7be08a;
-  --color-bus-off: #2c4a31;
-  --color-ctl: #ff6a5c;
-  --color-ctl-off: #5f7fa8;
-  --color-cu: #f2b8a6;
-  --color-cu-off: #3a2c29;
-  --color-node: #26231d;
-  --color-alu-off: #4a4435;
+  --color-bus: #8df09a;
   --color-write-code: #ff8a7e;
   --color-read-code: #a9c3e6;
 }
 
 :root {
-  --desk: #dedace;
+  --desk: radial-gradient(ellipse at 50% 0%, #ecdcbc 0%, #d3bb91 55%, #b89c6f 100%);
+  --desk-flat: #d3bb91;
+  /* Колір стола в отворах перфорації. */
+  --hole: #a88d62;
+  --rail:
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.25) 0 1px, rgb(0 0 0 / 0.03) 1px 3px),
+    linear-gradient(180deg, #f1eee6 0%, #d3cfc4 50%, #bdb8ac 100%);
+  --engrave: 0 1px 0 rgb(255 255 255 / 0.85);
+  --key: linear-gradient(180deg, #fbf9f3 0%, #dedacd 100%);
+  --key-fg: #1f1d1a;
+  --key-shadow:
+    inset 0 1px 0 #fff, inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 2px 0 #8f8a7c, 0 4px 6px rgb(0 0 0 / 0.3);
+  /* Тінь приладу на столі та тінь аркуша паперу. */
+  --drop: 0 36px 44px -14px rgb(0 0 0 / 0.5), 0 10px 12px rgb(0 0 0 / 0.3);
+  --drop-paper: 0 30px 34px -12px rgb(0 0 0 / 0.42), 0 4px 6px rgb(0 0 0 / 0.22);
+
   --chrome: #f4f1e8;
   --chrome-fg: #1f1d1a;
   --line: #b5af9e;
-  --tab: #1f1d1a;
-  --tab-fg: #f4f1e8;
   --ed: #fbf9f2;
   --ed-fg: #1f1d1a;
   --ed-dim: #6a6456;
   --ed-ok: #2f6b26;
   --ed-err: #a3281a;
-  --ed-label: #8a5a00;
-  --ed-arg: #9a3f22;
-  --ed-active: #e9e4d4;
 }
 
 .dark {
-  --desk: #100f0e;
+  --desk: radial-gradient(ellipse at 50% 0%, #553925 0%, #33200f 45%, #180f08 100%);
+  --desk-flat: #33200f;
+  --hole: #1d130b;
+  --rail:
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.03) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #423f3b 0%, #2b2926 48%, #201e1c 100%);
+  --engrave: 0 -1px 0 rgb(0 0 0 / 0.8), 0 1px 0 rgb(255 255 255 / 0.14);
+  --key: linear-gradient(180deg, #4c4843 0%, #33302d 100%);
+  --key-fg: #ece6d6;
+  --key-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.5), 0 2px 0 #0a0908, 0 4px 6px rgb(0 0 0 / 0.5);
+  --drop: 0 36px 44px -14px rgb(0 0 0 / 0.7), 0 10px 12px rgb(0 0 0 / 0.45);
+  --drop-paper: 0 30px 34px -12px rgb(0 0 0 / 0.6), 0 4px 6px rgb(0 0 0 / 0.3);
+
   --chrome: #1b1a18;
   --chrome-fg: #ece6d6;
   --line: #4a463f;
-  --tab: #c4902f;
-  --tab-fg: #1a1612;
   --ed: #191816;
   --ed-fg: #ece6d6;
   --ed-dim: #a29b8a;
   --ed-ok: #9bd38b;
   --ed-err: #ff8a7e;
-  --ed-label: #e0a93a;
-  --ed-arg: #e58a6a;
-  --ed-active: #2a2722;
 }
 
 body {
   margin: 0;
-  background: var(--desk);
+  background: var(--desk-flat);
   color: var(--chrome-fg);
   font-family: var(--font-sans);
   font-size: 0.875rem;
@@ -152,19 +148,142 @@ button:disabled {
 }
 
 @layer components {
-  /* Корпус і чорна панель із шовкографією. */
+  /* ---- Стіл і верхня планка ---------------------------------------------- */
+
+  .desk {
+    background:
+      url('./textures/wood.svg') 0 0 / 1400px 700px,
+      var(--desk);
+    background-blend-mode: overlay, normal;
+  }
+
+  .rail {
+    position: relative;
+    z-index: 2;
+    background: var(--rail);
+    color: var(--key-fg);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 -1px 0 rgb(0 0 0 / 0.55),
+      0 8px 18px rgb(0 0 0 / 0.45);
+  }
+
+  .engraved {
+    text-shadow: var(--engrave);
+  }
+
+  .keycap {
+    display: flex;
+    align-items: center;
+    height: 2.75rem;
+    border-radius: 5px;
+    background: var(--key);
+    color: var(--key-fg);
+    box-shadow: var(--key-shadow);
+  }
+
+  .keycap:hover {
+    filter: brightness(1.07);
+  }
+
+  .keycap:active,
+  .keycap[data-state='open'] {
+    transform: translateY(1px);
+  }
+
+  /* Обрана вкладка — натиснута клавіша з підсвіткою. */
+  .keycap[aria-current='page'] {
+    background: linear-gradient(180deg, #ffe4a3 0%, #f4b94e 55%, #d9942c 100%);
+    color: var(--color-on-lit);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.75),
+      0 1px 0 #6b4410,
+      0 0 14px rgb(255 180 70 / 0.6),
+      0 0 34px rgb(255 150 40 / 0.25);
+    transform: translateY(1px);
+  }
+
+  /* ---- Корпус, панель, шовкографія ---------------------------------------- */
+
   .machine {
-    background: var(--color-case);
-    border-radius: var(--radius-case);
-    padding: 0.75rem;
-    box-shadow: 0 3px 0 #000;
+    position: relative;
+    padding: 1rem;
+    border-radius: 16px;
+    background:
+      url('./textures/grain.svg'),
+      linear-gradient(180deg, #4d4944 0%, #35322f 5%, #2a2725 92%, #171514 100%);
+    background-blend-mode: overlay, normal;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.3),
+      inset 0 -2px 3px rgb(0 0 0 / 0.7),
+      inset 2px 0 2px rgb(255 255 255 / 0.05),
+      inset -2px 0 2px rgb(0 0 0 / 0.3),
+      var(--drop);
+  }
+
+  .screw {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background:
+      linear-gradient(var(--slot, 35deg), transparent 42%, rgb(0 0 0 / 0.8) 44% 56%, transparent 58%),
+      radial-gradient(circle at 35% 30%, #f3f1eb 0%, #a8a49c 45%, #5c5953 100%);
+    box-shadow:
+      0 1px 1px rgb(0 0 0 / 0.8),
+      0 0 0 1px rgb(0 0 0 / 0.35);
   }
 
   .faceplate {
-    background: var(--color-panel);
-    border: 1px solid var(--color-hair);
-    border-radius: 4px;
+    position: relative;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #1a1816 0%, #0e0d0c 40%, #0b0a09 100%);
     color: var(--color-legend);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.07),
+      inset 0 3px 8px rgb(0 0 0 / 0.9),
+      0 1px 0 rgb(255 255 255 / 0.16),
+      0 -1px 0 rgb(0 0 0 / 0.8);
+  }
+
+  /* Відблиск скла поверх панелі. */
+  .faceplate::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      112deg,
+      rgb(255 255 255 / 0.075) 0%,
+      rgb(255 255 255 / 0.03) 14%,
+      transparent 26%,
+      transparent 68%,
+      rgb(255 255 255 / 0.035) 84%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* Шильдик зі шліфованого алюмінію; він же — табличка з кодами. */
+  .brushed {
+    background:
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.17) 0 1px, rgb(0 0 0 / 0.04) 1px 2px),
+      linear-gradient(180deg, #e7e4dc 0%, #b8b4aa 48%, #d1cdc3 100%);
+    color: #171513;
+    text-shadow: 0 1px 0 rgb(255 255 255 / 0.65);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.85),
+      inset 0 -1px 0 rgb(0 0 0 / 0.35),
+      0 2px 3px rgb(0 0 0 / 0.7);
+  }
+
+  /* Табличка лежить на столі, а не на панелі: тінь довша. */
+  .placard {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      inset 0 -1px 0 rgb(0 0 0 / 0.35),
+      inset 1px 0 0 rgb(255 255 255 / 0.5),
+      var(--drop-paper);
   }
 
   .silk {
@@ -175,73 +294,747 @@ button:disabled {
     text-transform: uppercase;
   }
 
+  /* Лампа розжарювання під лінзою. */
   .lamp {
     border-radius: 9999px;
-    background: var(--color-lamp-off);
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
+    background:
+      radial-gradient(circle at 36% 30%, rgb(255 255 255 / 0.5) 0%, rgb(255 255 255 / 0.08) 14%, transparent 30%),
+      radial-gradient(circle at 50% 58%, #54392a 0%, #2c1c12 55%, #120b06 100%);
+    box-shadow:
+      0 0 0 2px #0b0907,
+      0 0 0 3px rgb(255 255 255 / 0.13),
+      inset 0 -2px 3px rgb(0 0 0 / 0.7);
   }
 
   .lamp[data-on='true'] {
-    background: var(--color-lamp);
-    box-shadow: 0 0 8px 3px rgb(255 196 92 / 0.85);
+    background: radial-gradient(circle at 38% 32%, #fff 0%, #fff4cf 16%, #ffd67e 40%, #ffa436 70%, #c96a12 100%);
+    box-shadow:
+      0 0 0 2px #0b0907,
+      0 0 0 3px rgb(255 255 255 / 0.16),
+      0 0 6px 3px rgb(255 190 90 / 0.95),
+      0 0 18px 7px rgb(255 150 40 / 0.5),
+      0 0 40px 14px rgb(255 130 30 / 0.16);
   }
 
+  .lamp[data-on='true'][data-tone='red'] {
+    background: radial-gradient(circle at 38% 32%, #fff 0%, #ffd9d2 18%, #ff7a6b 55%, #c62f1e 100%);
+    box-shadow:
+      0 0 0 2px #0b0907,
+      0 0 0 3px rgb(255 255 255 / 0.16),
+      0 0 6px 3px rgb(255 106 92 / 0.9),
+      0 0 18px 7px rgb(255 80 60 / 0.4);
+  }
+
+  /* Віконце індикатора за темним склом. */
   .readout {
-    background: var(--color-well);
-    border: 1px solid var(--color-hair);
-    border-radius: var(--radius-plate);
+    border: 0;
+    border-radius: 4px;
+    background:
+      linear-gradient(168deg, rgb(255 255 255 / 0.11) 0%, rgb(255 255 255 / 0.03) 38%, transparent 39%),
+      linear-gradient(180deg, #170705 0%, #220b06 100%);
+    box-shadow:
+      inset 0 2px 6px rgb(0 0 0 / 0.95),
+      inset 0 0 0 1px #000,
+      0 0 0 1px #3a3631,
+      0 1px 0 1px rgb(255 255 255 / 0.14);
     color: var(--color-amber);
     font-family: var(--font-mono);
     font-weight: 500;
+    text-shadow:
+      0 0 5px rgb(255 150 40 / 0.8),
+      0 0 14px rgb(255 110 20 / 0.4);
   }
 
-  .paddle {
-    width: 3.25rem;
-    height: 3.75rem;
-    border: 0;
-    border-radius: 4px 4px 10px 10px;
+  .led {
+    color: var(--color-led);
+    font-family: var(--font-led);
+    font-weight: 900;
+    letter-spacing: 0.04em;
+  }
+
+  /* Планка з клавішами керування. */
+  .keyrail {
+    border-radius: 5px;
+    background:
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, #2c2926 0%, #1c1a18 100%);
     box-shadow:
-      inset 0 -12px 0 rgb(0 0 0 / 0.22),
-      0 3px 0 #000;
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      inset 0 -1px 0 rgb(0 0 0 / 0.7),
+      0 2px 4px rgb(0 0 0 / 0.6);
+  }
+
+  .paddle-slot {
+    padding: 3px 3px 9px;
+    border-radius: 5px;
+    background: #060505;
+    box-shadow:
+      inset 0 3px 5px #000,
+      0 1px 0 rgb(255 255 255 / 0.16);
+  }
+
+  /* Клавіша-лопатка: верхня грань, злам і передня кромка. */
+  .paddle {
+    display: block;
+    width: 3.125rem;
+    height: 3.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 3px 3px 10px 10px;
+    background:
+      linear-gradient(90deg, rgb(255 255 255 / 0.2) 0%, transparent 32%, rgb(0 0 0 / 0.14) 100%),
+      linear-gradient(180deg, var(--hl) 0%, var(--base) 10%, var(--base) 56%, var(--lip) 58%, var(--low) 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.6),
+      inset 1px 0 0 rgb(255 255 255 / 0.2),
+      inset -1px 0 0 rgb(0 0 0 / 0.25),
+      inset 0 -2px 2px rgb(0 0 0 / 0.3),
+      0 4px 0 var(--side),
+      0 8px 7px rgb(0 0 0 / 0.75);
   }
 
   .paddle:active:not(:disabled) {
-    transform: translateY(2px);
+    transform: translateY(3px);
     box-shadow:
-      inset 0 -8px 0 rgb(0 0 0 / 0.22),
-      0 1px 0 #000;
+      inset 0 1px 0 rgb(255 255 255 / 0.6),
+      inset 1px 0 0 rgb(255 255 255 / 0.2),
+      inset -1px 0 0 rgb(0 0 0 / 0.25),
+      inset 0 -2px 2px rgb(0 0 0 / 0.3),
+      0 1px 0 var(--side),
+      0 3px 4px rgb(0 0 0 / 0.75);
   }
 
   .paddle:disabled {
     filter: saturate(0.35) brightness(0.7);
   }
 
-  /* Аркуш перфопаперу із зеленими смугами. */
-  .fanfold {
-    background: var(--color-fanfold);
-    color: var(--color-fan-ink);
-    border-radius: 3px;
-    box-shadow: 0 3px 0 rgb(0 0 0 / 0.5);
+  .paddle-ochre {
+    --hl: #ecc26a;
+    --base: #c4902f;
+    --lip: #9a6f1f;
+    --low: #74530f;
+    --side: #4a3408;
   }
 
-  .fanfold :focus-visible,
-  .tty :focus-visible {
-    outline-color: var(--color-ink);
+  .paddle-rust {
+    --hl: #c67a5c;
+    --base: #9a4e33;
+    --lip: #763723;
+    --low: #56260f;
+    --side: #33150a;
   }
 
+  .paddle-cream {
+    --hl: #fbf7ea;
+    --base: #e4dcc6;
+    --lip: #bfb69d;
+    --low: #9c9379;
+    --side: #5f5946;
+  }
+
+  /* Темна кнопка на панелі машини. */
+  .panel-key {
+    border: 0;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #45413c 0%, #27241f 100%);
+    color: var(--color-legend);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 -1px 0 rgb(0 0 0 / 0.5),
+      0 2px 0 #050404,
+      0 4px 5px rgb(0 0 0 / 0.6);
+  }
+
+  .panel-key:hover {
+    filter: brightness(1.15);
+  }
+
+  .panel-key:active {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      0 0 0 #050404,
+      0 1px 2px rgb(0 0 0 / 0.6);
+  }
+
+  /* Повзунок-фейдер із металевою ручкою. */
   .slider {
     width: 100%;
     height: 2.75rem;
     margin: 0;
-    accent-color: var(--color-key-ochre);
+    appearance: none;
+    background: transparent;
+  }
+
+  .slider::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #000, #1f1d1a);
+    box-shadow:
+      inset 0 1px 3px #000,
+      0 1px 0 rgb(255 255 255 / 0.2);
+  }
+
+  .slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 22px;
+    height: 36px;
+    margin-top: -14px;
+    border-radius: 4px;
+    background:
+      repeating-linear-gradient(90deg, rgb(0 0 0 / 0.3) 0 1px, rgb(255 255 255 / 0.12) 1px 3px),
+      linear-gradient(180deg, #f4f1ea, #a19e96 50%, #5f5c57);
+    box-shadow:
+      inset 0 1px 0 #fff,
+      0 3px 5px rgb(0 0 0 / 0.85);
+  }
+
+  .slider::-moz-range-track {
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #000, #1f1d1a);
+    box-shadow:
+      inset 0 1px 3px #000,
+      0 1px 0 rgb(255 255 255 / 0.2);
+  }
+
+  .slider::-moz-range-thumb {
+    width: 22px;
+    height: 36px;
+    border: 0;
+    border-radius: 4px;
+    background:
+      repeating-linear-gradient(90deg, rgb(0 0 0 / 0.3) 0 1px, rgb(255 255 255 / 0.12) 1px 3px),
+      linear-gradient(180deg, #f4f1ea, #a19e96 50%, #5f5c57);
+    box-shadow:
+      inset 0 1px 0 #fff,
+      0 3px 5px rgb(0 0 0 / 0.85);
+  }
+
+  .slider-ticks {
+    height: 7px;
+    margin: -6px 11px 0;
+    background: repeating-linear-gradient(90deg, rgb(233 226 208 / 0.7) 0 1px, transparent 1px 10%);
+  }
+
+  /* Тумблер: основа з гайкою й важілець, що дивиться вгору в увімкненому стані. */
+  .toggle {
+    position: relative;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 9999px;
+    background: radial-gradient(
+      circle,
+      #1f1d1a 0 26%,
+      #77746d 28%,
+      #f0eee8 44%,
+      #a09d96 60%,
+      #5e5b55 78%,
+      #2f2d29 100%
+    );
+    box-shadow:
+      0 2px 3px rgb(0 0 0 / 0.6),
+      0 0 0 1px rgb(0 0 0 / 0.4);
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 13px;
+    width: 10px;
+    height: 26px;
+    border-radius: 4px 4px 5px 5px;
+    background: linear-gradient(90deg, #77746e 0%, #fbfaf6 38%, #c9c6bf 60%, #6b6862 100%);
+    box-shadow:
+      0 4px 5px rgb(0 0 0 / 0.6),
+      inset 0 -2px 1px rgb(255 255 255 / 0.9);
+  }
+
+  [aria-checked='true'] > .toggle::after {
+    top: -9px;
+    border-radius: 5px 5px 4px 4px;
+    box-shadow:
+      0 3px 4px rgb(0 0 0 / 0.5),
+      inset 0 2px 1px rgb(255 255 255 / 0.9);
+  }
+
+  /* ---- Телетайп ----------------------------------------------------------- */
+
+  /* Литий пластик корпусу; з нього ж зроблено термінал редактора. */
+  .putty {
+    position: relative;
+    background:
+      url('./textures/grain.svg'),
+      linear-gradient(180deg, #e0d9c3 0%, #cfc8b2 22%, #c6bfa8 78%, #aea78f 100%);
+    background-blend-mode: overlay, normal;
+    color: var(--color-ink);
+    box-shadow:
+      inset 0 2px 0 rgb(255 255 255 / 0.6),
+      inset 0 -4px 5px rgb(0 0 0 / 0.22),
+      inset 2px 0 2px rgb(255 255 255 / 0.25),
+      inset -2px 0 3px rgb(0 0 0 / 0.12),
+      var(--drop);
+  }
+
+  .putty :focus-visible,
+  .fanfold :focus-visible,
+  .roll :focus-visible,
+  .brushed :focus-visible {
+    outline-color: var(--color-ink);
+  }
+
+  /* Тиснений у пластику напис. */
+  .embossed {
+    text-shadow: 0 1px 0 rgb(255 255 255 / 0.55);
+  }
+
+  .tty-slot {
+    height: 16px;
+    margin: 0 22px;
+    border-radius: 0 0 6px 6px;
+    background: linear-gradient(180deg, #050505 0%, #2a2926 100%);
+    box-shadow:
+      inset 0 5px 6px #000,
+      0 1px 0 rgb(255 255 255 / 0.55);
+  }
+
+  .tty-plate {
+    border-radius: 3px;
+    background: linear-gradient(180deg, #45423d 0%, #23211e 100%);
+    color: #efe9d8;
+    text-shadow: 0 -1px 0 rgb(0 0 0 / 0.7);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.28),
+      0 1px 0 rgb(255 255 255 / 0.55),
+      0 2px 2px rgb(0 0 0 / 0.35);
+  }
+
+  /* Папір, відірваний по зубцях; тінь дає обгортка, бо маска зрізає box-shadow. */
+  .torn-shadow {
+    filter: drop-shadow(0 -2px 3px rgb(0 0 0 / 0.4));
+  }
+
+  .torn {
+    background:
+      url('./textures/fiber.svg'),
+      linear-gradient(90deg, rgb(0 0 0 / 0.1) 0%, transparent 5%, transparent 95%, rgb(0 0 0 / 0.1) 100%),
+      linear-gradient(180deg, #efe9d6 0%, #f7f2e2 30%, #f3eedd 72%, #d3ccb6 100%);
+    background-blend-mode: multiply, normal, normal;
+    color: var(--color-ink);
+    text-shadow: 0 0 0.7px rgb(42 38 32 / 0.7);
+    mask:
+      conic-gradient(from 135deg at 50% 0, #000 90deg, transparent 0) 0 0 / 9px 6px repeat-x,
+      linear-gradient(#000, #000) 0 5px / 100% calc(100% - 5px) no-repeat;
+  }
+
+  /* Клавіші з фіксацією: натиснута сидить глибше. */
+  .seg-group {
+    display: flex;
+    gap: 2px;
+    padding: 3px 3px 6px;
+    border-radius: 7px;
+    background: linear-gradient(180deg, #1c1a17 0%, #35322d 100%);
+    box-shadow:
+      inset 0 2px 4px rgb(0 0 0 / 0.85),
+      0 1px 0 rgb(255 255 255 / 0.6);
+  }
+
+  .seg {
+    height: 2.75rem;
+    min-width: 3.125rem;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #faf6ea 0%, #e2dac4 100%);
+    color: var(--color-ink);
+    text-shadow: none;
+    box-shadow:
+      inset 0 1px 0 #fff,
+      inset 0 -2px 0 rgb(0 0 0 / 0.12),
+      0 3px 0 #8c8570,
+      0 4px 3px rgb(0 0 0 / 0.5);
+    transform: translateY(-1px);
+  }
+
+  .seg[aria-pressed='true'] {
+    background: linear-gradient(180deg, #a89f86 0%, #beb69e 100%);
+    box-shadow:
+      inset 0 3px 5px rgb(0 0 0 / 0.45),
+      inset 0 0 0 1px rgb(0 0 0 / 0.2);
+    transform: translateY(2px);
+  }
+
+  .btn-cream,
+  .btn-ochre {
+    height: 2.75rem;
+    border: 0;
+    border-radius: 5px;
+    color: var(--color-ink);
+    text-shadow: none;
+  }
+
+  .btn-cream {
+    background: linear-gradient(180deg, #faf6ea 0%, #e0d8c2 100%);
+    box-shadow:
+      inset 0 1px 0 #fff,
+      inset 0 -2px 0 rgb(0 0 0 / 0.12),
+      0 3px 0 #8c8570,
+      0 5px 4px rgb(0 0 0 / 0.4);
+  }
+
+  .btn-ochre {
+    background: linear-gradient(180deg, #f0c873 0%, #c4902f 58%, #a9781f 100%);
+    color: var(--color-on-lit);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.65),
+      inset 0 -2px 0 rgb(0 0 0 / 0.15),
+      0 3px 0 #6b4a10,
+      0 6px 5px rgb(0 0 0 / 0.45);
+  }
+
+  .btn-cream:hover:not(:disabled),
+  .btn-ochre:hover:not(:disabled) {
+    filter: brightness(1.05);
+  }
+
+  .btn-cream:active:not(:disabled),
+  .btn-ochre:active:not(:disabled) {
+    transform: translateY(3px);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.65),
+      0 0 0 #8c8570,
+      0 1px 2px rgb(0 0 0 / 0.4);
+  }
+
+  .btn-cream:disabled,
+  .btn-ochre:disabled {
+    opacity: 0.55;
+  }
+
+  /* Смужка паперу в металевій рамці. */
+  .paper-field {
+    border: 0;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #e6dfca 0%, #f7f2e2 22%, #f3eedd 100%);
+    color: var(--color-ink);
+    box-shadow:
+      inset 0 2px 3px rgb(0 0 0 / 0.4),
+      0 0 0 1px #6f6a5c,
+      0 0 0 4px #c2bdad,
+      0 0 0 5px #7b7667,
+      0 2px 0 5px rgb(255 255 255 / 0.55);
+  }
+
+  .paper-field:disabled {
+    background: linear-gradient(180deg, #c9c2ac 0%, #d6cfb9 100%);
+  }
+
+  .keys-tray {
+    border-radius: 10px;
+    background: linear-gradient(180deg, #a69f88 0%, #bdb69f 30%, #c4bda6 100%);
+    box-shadow:
+      inset 0 4px 7px rgb(0 0 0 / 0.4),
+      inset 0 -1px 0 rgb(255 255 255 / 0.5),
+      0 1px 0 rgb(255 255 255 / 0.5);
+  }
+
+  .round-key,
+  .spacebar {
+    color: #ece6d6;
+    box-shadow:
+      inset 0 2px 2px rgb(255 255 255 / 0.22),
+      inset 0 -3px 4px rgb(0 0 0 / 0.55),
+      0 4px 0 #121411,
+      0 6px 5px rgb(0 0 0 / 0.55);
+  }
+
+  .round-key {
+    border-radius: 9999px;
+    background: radial-gradient(circle at 50% 36%, #5d6459 0%, #40453d 46%, #2b2f29 72%, #1b1e1a 100%);
+  }
+
+  .spacebar {
+    border-radius: 9px;
+    background: linear-gradient(180deg, #5d6459 0%, #3a3f38 55%, #23261f 100%);
+  }
+
+  /* Наклеєна стрічка з тисненими літерами. */
+  .dymo {
+    border-radius: 2px;
+    background: linear-gradient(180deg, #24221f 0%, #0d0c0b 100%);
+    color: #f4f1e8;
+    text-shadow:
+      0 1px 0 #000,
+      0 -1px 0 rgb(255 255 255 / 0.35);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 1px 2px rgb(0 0 0 / 0.45);
+  }
+
+  /* ---- Папір -------------------------------------------------------------- */
+
+  /* Перфопапір: отвори транспортної доріжки, лінії відриву, стос аркушів під низом. */
+  .fanfold {
+    position: relative;
+    padding-inline: 30px;
+    border-radius: 2px;
+    background:
+      url('./textures/fiber.svg'),
+      radial-gradient(circle at 13px 12px, var(--hole) 0 4px, rgb(0 0 0 / 0.25) 4.6px, transparent 5.4px) 0 0 / 26px
+        24px repeat-y,
+      radial-gradient(circle at 13px 12px, var(--hole) 0 4px, rgb(0 0 0 / 0.25) 4.6px, transparent 5.4px) 100% 0 /
+        26px 24px repeat-y,
+      repeating-linear-gradient(180deg, rgb(60 75 65 / 0.4) 0 2px, transparent 2px 5px) 28px 0 / 1px 100% no-repeat,
+      repeating-linear-gradient(180deg, rgb(60 75 65 / 0.4) 0 2px, transparent 2px 5px) calc(100% - 28px) 0 / 1px
+        100% no-repeat,
+      linear-gradient(180deg, #f8f5ea 0%, #f5f2e6 60%, #ebe7d8 100%);
+    background-blend-mode: multiply, normal, normal, normal, normal, normal;
+    color: var(--color-fan-ink);
+    text-shadow: 0 0 0.7px rgb(35 48 42 / 0.65);
+    box-shadow:
+      inset 0 1px 0 #fff,
+      0 5px 0 -2px #e6e2d2,
+      0 6px 2px -2px rgb(0 0 0 / 0.35),
+      0 10px 0 -4px #dedac9,
+      0 11px 2px -4px rgb(0 0 0 / 0.35),
+      var(--drop-paper);
+  }
+
+  /* Рядок поточної команди, проведений маркером. */
+  .marker {
+    background: linear-gradient(
+      90deg,
+      rgb(255 212 60 / 0) 0%,
+      rgb(255 212 60 / 0.8) 2%,
+      rgb(255 204 48 / 0.72) 96%,
+      rgb(255 212 60 / 0) 100%
+    );
+    font-weight: 700;
+  }
+
+  /* Точка зупинки: олівцеве кільце або червона наклейка. */
+  .sticker {
+    width: 15px;
+    height: 15px;
+    border: 1.5px solid rgb(76 90 82 / 0.75);
+    border-radius: 9999px;
+  }
+
+  [aria-pressed='true'] > .sticker {
+    border: 0;
+    background: radial-gradient(circle at 35% 30%, #ff8a72 0%, #c8321c 55%, #8f1e0e 100%);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.5),
+      inset 0 -1px 1px rgb(0 0 0 / 0.25);
+  }
+
+  /* ---- ЕЛТ ---------------------------------------------------------------- */
+
+  .crt-bezel {
+    position: relative;
+    padding: 14px;
+    border-radius: 26px / 22px;
+    background: linear-gradient(180deg, #080707 0%, #1d1b19 100%);
+    box-shadow:
+      inset 0 4px 10px #000,
+      0 1px 0 rgb(255 255 255 / 0.3);
+  }
+
+  .crt {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px / 16px;
+    background: radial-gradient(ellipse at 50% 42%, #261a09 0%, #160e05 55%, #080503 100%);
+    color: var(--color-phosphor);
+    text-shadow:
+      0 0 4px rgb(255 150 40 / 0.6),
+      0 0 11px rgb(255 120 20 / 0.28);
+    box-shadow:
+      inset 0 0 40px rgb(0 0 0 / 0.9),
+      inset 0 0 5px rgb(255 170 60 / 0.2);
+    scrollbar-color: rgb(255 182 72 / 0.45) transparent;
+  }
+
+  /* Рядки розгортки, а над ними — відблиск і затемнення до країв. */
+  .crt::before,
+  .crt::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .crt::before {
+    background: repeating-linear-gradient(180deg, rgb(0 0 0 / 0.26) 0 1px, transparent 1px 3px);
+  }
+
+  .crt::after {
+    background:
+      radial-gradient(ellipse at 24% -6%, rgb(255 255 255 / 0.14) 0%, rgb(255 255 255 / 0.04) 30%, transparent 48%),
+      radial-gradient(ellipse at 50% 50%, transparent 55%, rgb(0 0 0 / 0.5) 100%);
+  }
+
+  /* Інверсне відео: підсвічена комірка, рядок стану. */
+  .crt-inverse {
+    background: var(--color-led);
+    color: #140c04;
+    text-shadow: none;
+    box-shadow: 0 0 12px rgb(255 160 50 / 0.65);
+  }
+
+  .crt-inverse[data-tone='error'] {
+    background: #ff7a6b;
+    box-shadow: 0 0 12px rgb(255 106 92 / 0.65);
+  }
+
+  /* ---- Мнемосхема --------------------------------------------------------- */
+
+  /* Шина — трубка зі світлопроводу, лінії керування — тонкі провідники. */
+  .wire-bus {
+    border-radius: 5px;
+    background: #1f3325;
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / 0.8),
+      0 1px 0 rgb(255 255 255 / 0.06);
+  }
+
+  .wire-bus[data-on='true'] {
+    background: var(--color-bus);
+    box-shadow:
+      inset 0 0 3px #ecffee,
+      0 0 8px rgb(123 224 138 / 0.9),
+      0 0 24px rgb(123 224 138 / 0.4);
+  }
+
+  .wire-ctl {
+    background: #5f7fa8;
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.8);
+  }
+
+  .wire-ctl[data-on='true'] {
+    background: #ff6a5c;
+    box-shadow:
+      inset 0 0 1px #ffd3cd,
+      0 0 6px rgb(255 106 92 / 0.9),
+      0 0 14px rgb(255 106 92 / 0.35);
+  }
+
+  /* Модуль регістра чи пам'яті; активний підсвічено по контуру. */
+  .module {
+    border-radius: 5px;
+    background: linear-gradient(180deg, #3a362f 0%, #24211c 100%);
+    color: var(--color-legend);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      inset 0 -1px 0 rgb(0 0 0 / 0.6),
+      0 3px 0 #050404,
+      0 6px 8px rgb(0 0 0 / 0.7);
+  }
+
+  .module[data-on='true'] {
+    color: var(--color-amber);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      0 0 0 2px var(--color-amber),
+      0 0 18px 3px rgb(255 198 92 / 0.65),
+      0 3px 0 #050404;
+  }
+
+  .module-window {
+    border-radius: 3px;
+    background:
+      linear-gradient(168deg, rgb(255 255 255 / 0.11) 0%, rgb(255 255 255 / 0.03) 38%, transparent 39%),
+      linear-gradient(180deg, #170705 0%, #220b06 100%);
+    box-shadow:
+      inset 0 2px 5px rgb(0 0 0 / 0.95),
+      inset 0 0 0 1px #000,
+      0 1px 0 rgb(255 255 255 / 0.14);
+    text-shadow:
+      0 0 5px rgb(255 150 40 / 0.9),
+      0 0 14px rgb(255 110 20 / 0.5);
+  }
+
+  /* Пристрій керування — панель із молочного оргскла з підсвіткою зсередини. */
+  .acrylic {
+    border-radius: 5px;
+    background: linear-gradient(180deg, #5a433b 0%, #46342e 48%, #33251f 100%);
+    color: var(--color-legend);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.2),
+      inset 0 -3px 5px rgb(0 0 0 / 0.45),
+      0 0 0 2px #0b0907,
+      0 0 0 3px rgb(255 255 255 / 0.14);
+  }
+
+  .acrylic[data-on='true'] {
+    background: linear-gradient(180deg, #ffd6c8 0%, #f2b8a6 48%, #d79782 100%);
+    color: var(--color-on-lit);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.75),
+      inset 0 -3px 5px rgb(120 50 30 / 0.35),
+      0 0 0 2px #0b0907,
+      0 0 0 3px rgb(255 255 255 / 0.14),
+      0 0 20px rgb(242 184 166 / 0.5);
+  }
+
+  .alu {
+    background:
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.09) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, #7a725f 0%, #4a4435 100%);
+    color: #f1ebda;
+    text-shadow: 0 -1px 0 rgb(0 0 0 / 0.7);
+    clip-path: polygon(0 0, 38% 0, 50% 30%, 62% 0, 100% 0, 82% 100%, 18% 100%);
+  }
+
+  .alu[data-on='true'] {
+    background: linear-gradient(180deg, #ffe4a3 0%, #ffc65c 55%, #e0a23a 100%);
+    color: var(--color-on-lit);
+    text-shadow: none;
+  }
+
+  /* Матриця феритових осердь на мідних дротах. */
+  .core-plane {
+    border-radius: 3px;
+    background:
+      radial-gradient(circle at 3px 3px, #120d0a 0 1.5px, transparent 2px) 0 0 / 6px 6px,
+      linear-gradient(180deg, transparent 2.5px, rgb(222 160 92 / 0.8) 2.5px 3.5px, transparent 3.5px) 0 0 / 6px 6px,
+      linear-gradient(90deg, transparent 2.5px, rgb(222 160 92 / 0.8) 2.5px 3.5px, transparent 3.5px) 0 0 / 6px 6px,
+      #2f2218;
+    box-shadow:
+      inset 0 2px 5px rgb(0 0 0 / 0.8),
+      0 0 0 1px #000,
+      0 1px 0 1px rgb(255 255 255 / 0.14);
+  }
+
+  /* Віконця з кодами на лініях вибору. */
+  .code-window {
+    border-radius: 3px;
+    box-shadow:
+      inset 0 2px 5px rgb(0 0 0 / 0.95),
+      0 1px 0 rgb(255 255 255 / 0.35);
+  }
+
+  .code-window[data-kind='write'] {
+    background: linear-gradient(180deg, #170705 0%, #220b06 100%);
+    color: var(--color-write-code);
+    text-shadow: 0 0 6px rgb(255 106 92 / 0.75);
+  }
+
+  .code-window[data-kind='read'] {
+    background: linear-gradient(180deg, #050a14 0%, #0a1322 100%);
+    color: var(--color-read-code);
+    text-shadow: 0 0 6px rgb(120 160 220 / 0.7);
   }
 }
 
-/* CodeMirror: кольори беруться з теми застосунку. */
+/* CodeMirror на екрані ЕЛТ. */
 .cm-editor {
   height: 100%;
-  background: var(--ed);
-  color: var(--ed-fg);
+  background: transparent;
+  color: var(--color-phosphor);
   font-size: var(--text-body);
 }
 
@@ -255,41 +1048,56 @@ button:disabled {
 }
 
 .cm-editor .cm-gutters {
-  background: var(--ed);
-  color: var(--ed-dim);
-  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--color-phosphor-dim);
+  border-right: 1px solid rgb(255 182 72 / 0.25);
 }
 
 .cm-editor .cm-activeLine,
 .cm-editor .cm-activeLineGutter {
-  background: var(--ed-active);
+  background: rgb(255 182 72 / 0.12);
 }
 
 .cm-editor .cm-cursor {
-  border-left-color: var(--ed-fg);
+  border-left: 2px solid var(--color-phosphor-hi);
 }
 
 .cm-editor .cm-selectionBackground,
 .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
-  background: color-mix(in srgb, var(--color-key-ochre) 35%, transparent);
+  background: rgb(255 182 72 / 0.3);
 }
 
 .cm-editor .cm-placeholder {
-  color: var(--ed-dim);
+  color: var(--color-phosphor-dim);
 }
 
+/* Підказки й панель пошуку — без свічення, щоб дрібний текст лишався чітким. */
+.cm-editor .cm-tooltip,
+.cm-editor .cm-panels {
+  border: 1px solid rgb(255 182 72 / 0.45);
+  background: #120b04;
+  color: var(--color-phosphor);
+  text-shadow: none;
+}
+
+.cm-editor .cm-textfield,
+.cm-editor .cm-button {
+  border: 1px solid rgb(255 182 72 / 0.45);
+  background: #1d1307;
+  background-image: none;
+  color: var(--color-phosphor);
+}
+
+/* Монохромний екран: токени розрізняються яскравістю й насиченістю шрифту. */
 .tok-label {
-  color: var(--ed-label);
+  color: var(--color-phosphor-hi);
+  font-weight: 700;
 }
 
 .tok-mnemonic {
   font-weight: 600;
 }
 
-.tok-number {
-  color: var(--ed-arg);
-}
-
 .tok-comment {
-  color: var(--ed-dim);
+  color: var(--color-phosphor-dim);
 }

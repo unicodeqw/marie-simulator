@@ -19,7 +19,7 @@ import { projectStore } from '@/core/project'
 import { Part, type DataPathSnapshot, type Frame } from '@/core/types'
 import { useT } from '@/i18n'
 import { useEffect, useRef, type CSSProperties } from 'react'
-import { DelaySlider, MachineInput, PaddleKey, RadixButton, StatusLine, Switch } from './hardware'
+import { DelaySlider, MachineInput, Nameplate, PaddleKey, RadixButton, Screws, StatusLine, Switch } from './hardware'
 import { PaperHeader, ProgramTable } from './ProgramListing'
 import { cn } from './styles'
 
@@ -77,35 +77,31 @@ const binary = (code: number) => code.toString(2).padStart(3, '0')
 // ---------------------------------------------------------------------------
 
 function Wire({ on, kind, style }: { on: boolean; kind: 'bus' | 'ctl'; style: CSSProperties }) {
-  const color =
-    kind === 'bus' ? (on ? 'bg-bus shadow-[0_0_10px_rgb(123_224_138/0.6)]' : 'bg-bus-off') : on ? 'bg-ctl' : 'bg-ctl-off'
-  return <div className={cn('absolute', color)} style={style} />
+  return <div className={cn('absolute', kind === 'bus' ? 'wire-bus' : 'wire-ctl')} data-on={on} style={style} />
 }
 
-function TapLamp({ on, left, top }: { on: boolean; left: number; top: number }) {
-  return <span className="lamp absolute" data-on={on} style={box(left, top, LAMP, LAMP)} />
+function TapLamp({ on, tone, left, top }: { on: boolean; tone?: 'red'; left: number; top: number }) {
+  return <span className="lamp absolute" data-on={on} data-tone={tone} style={box(left, top, LAMP, LAMP)} />
 }
 
 /** Код на джгуті ліній і назва обраного вузла. */
 function SelectCode({
+  kind,
   label,
   code,
   target,
   top,
-  className,
 }: {
+  kind: 'write' | 'read'
   label: string
   code: number | null
   target: string
   top: number
-  className: string
 }) {
   return (
     <div
-      className={cn(
-        'absolute flex flex-col items-center justify-center rounded-plate bg-panel font-mono text-code leading-4.5 font-semibold',
-        className,
-      )}
+      className="code-window absolute flex flex-col items-center justify-center font-mono text-code leading-4.5 font-semibold whitespace-nowrap"
+      data-kind={kind}
       style={box(UNIT.left + 10, top, UNIT.width - 20, 44)}
     >
       <span className="uppercase">
@@ -116,9 +112,9 @@ function SelectCode({
   )
 }
 
-const node = 'absolute flex items-center justify-center rounded text-center'
-const nodeOn = 'border border-lamp bg-amber font-semibold text-on-lit shadow-[0_0_14px_rgb(255_198_92/0.6)]'
-const nodeOff = 'border border-edge bg-node text-legend'
+const node = 'absolute flex items-center justify-center text-center'
+const moduleName = 'font-condensed text-code leading-4 font-bold tracking-widest'
+const moduleWindow = 'module-window led flex w-full items-center justify-center'
 
 function Mimic() {
   const t = useT()
@@ -128,8 +124,7 @@ function Mimic() {
   const { frame } = snap
   const writing = frame.write !== null
   const reading = frame.read !== null
-  const memoryName = t.datapath.memory.toLowerCase()
-  const target = (code: number | null) => (code === 0 ? memoryName : PART_NAMES[code ?? 0])
+  const target = (code: number | null) => (code === 0 ? t.datapath.memoryShort : PART_NAMES[code ?? 0])
   const line = snap.focusRow === null ? undefined : program[snap.focusRow]
   const linkTop = (offset: number) => REGISTER.top + offset
   const aluLinkHeight = ALU.top - linkTop(LINK.alu)
@@ -187,11 +182,8 @@ function Mimic() {
         />
 
         <div
-          className={cn(
-            node,
-            'font-condensed text-sm leading-5 font-bold tracking-widest uppercase',
-            frame.control ? 'bg-cu text-on-lit shadow-[0_0_14px_rgb(242_184_166/0.5)]' : 'bg-cu-off text-legend',
-          )}
+          className={cn(node, 'acrylic px-2 font-condensed text-sm leading-5 font-bold tracking-widest uppercase')}
+          data-on={frame.control}
           style={UNIT}
         >
           {t.datapath.controlUnit}
@@ -200,38 +192,32 @@ function Mimic() {
         {REGISTERS.map((r) => (
           <div
             key={r.name}
-            className={cn(node, 'flex-col font-mono text-lg leading-6', isActive(frame, r.part) ? nodeOn : nodeOff)}
+            className={cn(node, 'module flex-col gap-0.75 px-1.5 pt-1.25 pb-1.5')}
+            data-on={isActive(frame, r.part)}
             style={{ left: r.left, ...REGISTER }}
           >
-            <b className="font-condensed text-sm tracking-widest">{r.name}</b>
-            {hex(snap[r.key], r.digits)}
+            <b className={moduleName}>{r.name}</b>
+            <span className={cn(moduleWindow, 'h-7.5 text-[1.1875rem]')}>{hex(snap[r.key], r.digits)}</span>
           </div>
         ))}
 
         <div
-          className={cn(
-            node,
-            'pt-4.5 font-condensed text-sm font-bold tracking-widest [clip-path:polygon(0_0,38%_0,50%_30%,62%_0,100%_0,82%_100%,18%_100%)]',
-            frame.alu ? 'bg-amber text-on-lit' : 'bg-alu-off text-legend',
-          )}
+          className={cn(node, 'alu pt-4.5 font-condensed text-sm font-bold tracking-widest')}
+          data-on={frame.alu}
           style={ALU}
         >
           ALU
         </div>
 
         <div
-          className={cn(
-            node,
-            'flex-col gap-2 px-2 font-condensed text-sm leading-5 font-bold tracking-widest uppercase',
-            isActive(frame, Part.memory) ? nodeOn : nodeOff,
-          )}
+          className={cn(node, 'module flex-col gap-2.5 px-2.5 py-3')}
+          data-on={isActive(frame, Part.memory)}
           style={MEMORY}
         >
-          {t.datapath.memory}
-          <span className="font-mono text-code font-semibold tracking-normal normal-case">
-            M[{hex(snap.mar, 3)}]
-            <br />= {hex(marWord, 4)}
-          </span>
+          <b className={cn(moduleName, 'uppercase')}>{t.datapath.memory}</b>
+          <span className="core-plane size-24" aria-hidden />
+          <span className="font-mono text-code font-semibold text-legend">M[{hex(snap.mar, 3)}]</span>
+          <span className={cn(moduleWindow, 'h-8.5 text-[1.3125rem]')}>{hex(marWord, 4)}</span>
         </div>
 
         {/* Лампи на відводах показують обраний приймач і джерело. */}
@@ -239,33 +225,22 @@ function Mimic() {
           <TapLamp
             key={`w${r.name}`}
             on={frame.write === r.part}
+            tone="red"
             left={r.left + TAP.write - 5}
             top={REGISTER.top - LAMP - 3}
           />
         ))}
-        <TapLamp on={frame.write === Part.memory} left={MEMORY.left - LAMP - 4} top={WRITE_TOP - 4} />
+        <TapLamp on={frame.write === Part.memory} tone="red" left={MEMORY.left - LAMP - 4} top={WRITE_TOP - 4} />
         {REGISTERS.map((r) => (
           <TapLamp key={`r${r.name}`} on={frame.read === r.part} left={r.left + TAP.read - 5} top={REGISTER_BOTTOM + 4} />
         ))}
         <TapLamp on={frame.read === Part.memory} left={MEMORY.left - LAMP - 4} top={READ_TOP - 4} />
 
-        <SelectCode
-          label={t.datapath.write}
-          code={frame.write}
-          target={target(frame.write)}
-          top={WRITE_TOP + 9}
-          className="text-write-code"
-        />
-        <SelectCode
-          label={t.datapath.read}
-          code={frame.read}
-          target={target(frame.read)}
-          top={READ_TOP - 53}
-          className="text-read-code"
-        />
+        <SelectCode kind="write" label={t.datapath.write} code={frame.write} target={target(frame.write)} top={WRITE_TOP + 9} />
+        <SelectCode kind="read" label={t.datapath.read} code={frame.read} target={target(frame.read)} top={READ_TOP - 53} />
 
         <div
-          className="silk absolute text-center text-xs tracking-[0.14em] text-bus"
+          className="silk absolute text-center text-xs tracking-[0.14em] text-bus [text-shadow:0_0_8px_rgb(123_224_138/0.6)]"
           style={box(BUS_LEFT, 8, MEMORY.left - BUS_LEFT, 16)}
         >
           {t.datapath.bus}
@@ -314,7 +289,7 @@ function Controls() {
   const fastFetch = dpStore.use((s) => s.fastFetch)
   const inputRadix = dpStore.use((s) => s.inputRadix)
   return (
-    <div className="flex flex-wrap items-end gap-x-3.5 gap-y-4 border-t border-hair pt-4">
+    <div className="keyrail flex flex-wrap items-end gap-x-3 gap-y-4 px-3.5 pt-3.5 pb-4">
       <PaddleKey label={t.panel.run} tone="ochre" title={`${t.panel.run} (F5)`} disabled={!loaded} onClick={run} />
       <PaddleKey label={t.panel.stop} tone="rust" title={`${t.panel.stop} (Shift+F5)`} disabled={!running} onClick={stop} />
       <PaddleKey label={t.panel.step} tone="ochre" title={`${t.panel.step} (F10)`} disabled={!loaded} onClick={step} />
@@ -327,12 +302,12 @@ function Controls() {
           if (await ask('reset')) reset()
         }}
       />
-      <div className="ml-3 flex h-15 items-center">
+      <div className="ml-3 flex h-18 items-center">
         <Switch variant="panel" checked={fastFetch} onChange={setFastFetch}>
           {t.datapath.fastFetch}
         </Switch>
       </div>
-      <div className="ml-3 flex h-15 items-center gap-2">
+      <div className="ml-3 flex h-18 items-center gap-2.5">
         <label htmlFor="dp-in" className="silk">
           {t.teletype.input}
         </label>
@@ -361,23 +336,26 @@ function Controls() {
 
 function Codes() {
   const t = useT()
-  const grid = 'grid grid-cols-[4.5rem_minmax(0,1fr)] items-center px-4'
+  const grid = 'grid grid-cols-[4.5rem_minmax(0,1fr)] items-center px-1.5'
+  // Гравірована риска: темна канавка зі світлою кромкою.
+  const engravedRule = 'border-b border-black/25 shadow-[0_1px_0_rgb(255_255_255/0.55)]'
   return (
-    <section aria-label={t.datapath.codes} className="fanfold min-w-0 flex-[1_1_15.5rem]">
-      <PaperHeader title={t.datapath.codes} />
-      <div className={cn('silk flex h-7 border-y border-fan-rule tracking-widest text-fan-dim', grid)}>
+    <section aria-label={t.datapath.codes} className="brushed placard relative min-w-0 flex-[1_1_15.5rem] rounded px-4.5 pt-1.5 pb-3.5">
+      <Screws />
+      <div className="py-3.5 text-center font-condensed text-sm font-bold tracking-[0.12em] uppercase">{t.datapath.codes}</div>
+      <div className={cn('silk h-7 tracking-widest', grid, engravedRule, 'border-t')}>
         <div>{t.datapath.code}</div>
         <div>{t.datapath.device}</div>
       </div>
-      <div className="font-mono">
+      <div className="font-mono font-medium">
         {PART_NAMES.map((name, code) => (
-          <div key={code} className={cn(grid, 'h-7.5', code % 2 === 1 && 'bg-bar')}>
+          <div key={code} className={cn(grid, engravedRule, 'h-7.5')}>
             <div>{binary(code)}</div>
             <div>{name || t.datapath.memory.toLowerCase()}</div>
           </div>
         ))}
       </div>
-      <p className="px-4 pt-2.5 pb-3.5 text-xs leading-4.5 text-fan-dim">{t.datapath.codesNote}</p>
+      <p className="px-1.5 pt-3 pb-1 text-xs leading-4.5">{t.datapath.codesNote}</p>
     </section>
   )
 }
@@ -394,29 +372,28 @@ function Trace() {
 
   const first = total - trace.length
   return (
-    <section
-      aria-label={t.datapath.trace}
-      className="tty min-w-0 flex-[1_1_27.5rem] rounded-plate bg-paper text-ink shadow-[0_3px_0_rgb(0_0_0/0.5)]"
-    >
-      <PaperHeader title={t.datapath.trace}>
-        <button
-          type="button"
-          className="h-11 rounded border border-ink px-3 text-code hover:bg-key-cream disabled:opacity-45"
-          disabled={total === 0}
-          onClick={() => exportTrace()}
-        >
-          {t.datapath.saveTrace}
-        </button>
-      </PaperHeader>
-      <div className="border-t border-paper-rule px-4 pt-2 font-mono text-sm leading-6 font-semibold whitespace-pre">
-        {'  IR   OUT    IN    AC   MBR   PC   MAR'}
-      </div>
-      <div ref={paper} role="log" className="h-69 overflow-auto px-4 pb-3.5 font-mono text-sm leading-6 whitespace-pre">
-        {trace.map((row, i) => (
-          <div key={first + i} className={cn(i === trace.length - 1 && 'font-bold')}>
-            {row}
-          </div>
-        ))}
+    <section aria-label={t.datapath.trace} className="roll min-w-0 flex-[1_1_27.5rem] [filter:drop-shadow(0_14px_14px_rgb(0_0_0/0.45))_drop-shadow(0_2px_3px_rgb(0_0_0/0.3))]">
+      <div className="torn pt-1.5">
+        <PaperHeader title={t.datapath.trace}>
+          <button
+            type="button"
+            className="h-11 rounded border border-ink px-3 text-code hover:bg-black/5 disabled:opacity-45"
+            disabled={total === 0}
+            onClick={() => exportTrace()}
+          >
+            {t.datapath.saveTrace}
+          </button>
+        </PaperHeader>
+        <div className="border-t border-paper-rule px-4 pt-2 font-mono text-sm leading-6 font-semibold whitespace-pre">
+          {'  IR   OUT    IN    AC   MBR   PC   MAR'}
+        </div>
+        <div ref={paper} role="log" className="h-69 overflow-auto px-4 pb-4.5 font-mono text-sm leading-6 whitespace-pre">
+          {trace.map((row, i) => (
+            <div key={first + i} className={cn(i === trace.length - 1 && 'font-bold')}>
+              {row}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )
@@ -430,11 +407,12 @@ export function DataPathView() {
   const fileName = projectStore.use((s) => s.fileName)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-8">
       <section aria-label={t.tabs.datapath} className="machine">
-        <div className="faceplate flex flex-col gap-3.5 px-5 py-4.5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="font-condensed text-3xl font-bold tracking-[0.22em]">MARIE·16</div>
+        <Screws />
+        <div className="faceplate flex flex-col gap-4 px-5.5 pt-5 pb-5.5">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <Nameplate />
             <div className="silk text-xs font-medium tracking-[0.12em] text-dim">{t.datapath.subtitle}</div>
           </div>
           <Mimic />
@@ -443,7 +421,7 @@ export function DataPathView() {
         </div>
       </section>
 
-      <div className="flex flex-wrap items-start gap-4">
+      <div className="flex flex-wrap items-start gap-7">
         <section aria-label={t.program.title} className="fanfold min-w-0 flex-[1_1_23.75rem]">
           <PaperHeader title={`${t.program.title} · ${fileName}`} />
           <ProgramTable program={program} focusRow={focusRow} />

@@ -1,10 +1,38 @@
 import type { Radix, Status } from '@/core/types'
 import { useT } from '@/i18n'
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { cn } from './styles'
 
-export function Lamp({ on, className }: { on: boolean; className?: string }) {
-  return <span className={cn('lamp block size-3', className)} data-on={on} />
+export function Lamp({ on, tone, className }: { on: boolean; tone?: 'red'; className?: string }) {
+  return <span className={cn('lamp block size-3', className)} data-on={on} data-tone={tone} />
+}
+
+// Кут шліца в кожного гвинта свій, як після викрутки.
+const SCREWS = [
+  { at: 'top-1.5 left-1.5', slot: '35deg' },
+  { at: 'top-1.5 right-1.5', slot: '120deg' },
+  { at: 'bottom-1.5 left-1.5', slot: '80deg' },
+  { at: 'right-1.5 bottom-1.5', slot: '160deg' },
+]
+
+/** Чотири гвинти по кутах найближчого позиціонованого предка. */
+export function Screws() {
+  return (
+    <>
+      {SCREWS.map((s) => (
+        <span key={s.at} className={cn('screw', s.at)} style={{ '--slot': s.slot } as CSSProperties} aria-hidden />
+      ))}
+    </>
+  )
+}
+
+/** Шильдик машини. */
+export function Nameplate() {
+  return (
+    <div className="brushed rounded-xs py-1 pr-2 pl-4 font-condensed text-[1.625rem] leading-8.5 font-bold tracking-[0.22em]">
+      MARIE·16
+    </div>
+  )
 }
 
 /**
@@ -16,11 +44,11 @@ export const LampRow = memo(function LampRow({ value, width }: { value: number; 
     <div className="flex" aria-hidden>
       {Array.from({ length: 16 }, (_, i) => {
         const bit = 15 - i
-        if (bit >= width) return <span key={bit} className="h-11.5 w-7.5" />
+        if (bit >= width) return <span key={bit} className="h-12.5 w-8" />
         const rust = (bit >> 2) % 2 === 1
         return (
-          <span key={bit} className={cn('flex h-11.5 w-7.5 items-center justify-center', rust ? 'bg-band-rust' : 'bg-band-ochre')}>
-            <Lamp on={((value >> bit) & 1) === 1} className="size-3.5" />
+          <span key={bit} className={cn('flex h-12.5 w-8 items-center justify-center', rust ? 'bg-band-rust' : 'bg-band-ochre')}>
+            <Lamp on={((value >> bit) & 1) === 1} className="size-[0.9375rem]" />
           </span>
         )
       })}
@@ -28,7 +56,7 @@ export const LampRow = memo(function LampRow({ value, width }: { value: number; 
   )
 })
 
-const TONES = { ochre: 'bg-key-ochre', rust: 'bg-key-rust', cream: 'bg-key-cream' }
+const TONES = { ochre: 'paddle-ochre', rust: 'paddle-rust', cream: 'paddle-cream' }
 
 /** Клавіша-лопатка з підписом над нею. */
 export function PaddleKey({
@@ -45,18 +73,20 @@ export function PaddleKey({
   onClick: () => void
 }) {
   return (
-    <div className="flex w-16 flex-col items-center gap-1.5">
+    <div className="flex w-16.5 flex-col items-center gap-1.5">
       <span className="silk flex min-h-7 items-end text-center leading-tight" aria-hidden>
         {label}
       </span>
-      <button
-        type="button"
-        className={cn('paddle', TONES[tone])}
-        aria-label={label}
-        title={title ?? label}
-        disabled={disabled}
-        onClick={onClick}
-      />
+      <div className="paddle-slot">
+        <button
+          type="button"
+          className={cn('paddle', TONES[tone])}
+          aria-label={label}
+          title={title ?? label}
+          disabled={disabled}
+          onClick={onClick}
+        />
+      </div>
     </div>
   )
 }
@@ -73,7 +103,7 @@ export function RadixButton({ name, radix, onChange }: { name: string; radix: Ra
   return (
     <button
       type="button"
-      className="silk h-11 w-12 rounded-plate border border-edge bg-transparent text-legend hover:bg-white/5"
+      className="panel-key silk h-11 w-12.5"
       aria-label={hint}
       title={hint}
       onClick={() => onChange(RADIXES[(RADIXES.indexOf(radix) + 1) % RADIXES.length])}
@@ -83,21 +113,12 @@ export function RadixButton({ name, radix, onChange }: { name: string; radix: Ra
   )
 }
 
-/** Трипозиційний перемикач HEX / DEC / ASCII на корпусі телетайпа. */
+/** Три клавіші з фіксацією HEX / DEC / ASCII на корпусі телетайпа. */
 export function RadixSegments({ label, radix, onChange }: { label: string; radix: Radix; onChange: (r: Radix) => void }) {
   return (
-    <div role="group" aria-label={label} className="flex">
+    <div role="group" aria-label={label} className="seg-group">
       {RADIXES.map((r) => (
-        <button
-          key={r}
-          type="button"
-          aria-pressed={r === radix}
-          className={cn(
-            'silk h-11 border border-ink px-3 text-xs not-first:border-l-0 first:rounded-l last:rounded-r',
-            r === radix ? 'bg-ink text-paper' : 'bg-key-cream text-ink hover:bg-paper',
-          )}
-          onClick={() => onChange(r)}
-        >
+        <button key={r} type="button" aria-pressed={r === radix} className="seg silk text-xs font-bold" onClick={() => onChange(r)}>
           {RADIX_LABEL[r]}
         </button>
       ))}
@@ -105,6 +126,7 @@ export function RadixSegments({ label, radix, onChange }: { label: string; radix
   )
 }
 
+/** Тумблер: важілець угору — увімкнено. */
 export function Switch({
   checked,
   onChange,
@@ -122,20 +144,12 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       className={cn(
-        'flex h-11 items-center gap-2.5 border-0 bg-transparent p-0',
+        'flex min-h-12.5 items-center gap-3 border-0 bg-transparent p-0 pl-1 text-left',
         variant === 'panel' ? 'silk text-legend' : 'text-code text-ink',
       )}
       onClick={() => onChange(!checked)}
     >
-      <span
-        className={cn(
-          'flex h-5 w-9.5 rounded-full p-0.5',
-          checked ? 'justify-end' : 'justify-start',
-          variant === 'panel' ? 'border border-edge bg-well' : 'bg-ink',
-        )}
-      >
-        <span className={cn('size-4 rounded-full', checked ? 'bg-key-ochre' : 'bg-dim')} />
-      </span>
+      <span className="toggle" aria-hidden />
       {children}
     </button>
   )
@@ -167,7 +181,9 @@ export function DelaySlider({
     <div className="ml-auto flex min-w-56 flex-col gap-1.5">
       <label htmlFor={id} className="silk flex justify-between gap-3">
         <span>{label}</span>
-        <span className="font-mono tracking-normal text-amber normal-case">{t.panel.delayValue(value)}</span>
+        <span className="font-mono tracking-normal text-amber normal-case [text-shadow:0_0_6px_rgb(255_150_40/0.6)]">
+          {t.panel.delayValue(value)}
+        </span>
       </label>
       <input
         id={id}
@@ -179,6 +195,7 @@ export function DelaySlider({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
       />
+      <div className="slider-ticks" aria-hidden />
       <div className="flex justify-between font-mono text-2xs text-dim" aria-hidden>
         <span>{minLabel ?? min}</span>
         <span>{t.panel.delayValue(max)}</span>
@@ -231,7 +248,7 @@ export function MachineInput({
         disabled={!waiting}
         value={text}
         placeholder={placeholder}
-        className={cn(className, waiting && 'ring-3 ring-key-ochre')}
+        className={cn(className, waiting && 'outline-3 outline-offset-6 outline-key-ochre')}
         onChange={(e) => setText(e.target.value)}
       />
     </form>

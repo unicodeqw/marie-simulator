@@ -34,7 +34,7 @@ export function PaperButton({
       aria-pressed={pressed}
       className={cn(
         'h-11 rounded border border-fan-ink px-3 text-code disabled:opacity-45',
-        pressed ? 'bg-fan-ink text-fanfold' : 'hover:bg-bar',
+        pressed ? 'bg-fan-ink text-paper [text-shadow:none]' : 'hover:bg-bar',
         className,
       )}
       disabled={disabled}
@@ -80,7 +80,7 @@ interface Breakpoints {
 
 /**
  * Таблиця програми: адреса, мітка, команда, операнд, код. Із `breakpoints`
- * зліва з'являється колонка «перфорації» з точками зупинки.
+ * зліва з'являється колонка з точками зупинки: олівцеве кільце або наклейка.
  */
 export function ProgramTable({
   program,
@@ -121,7 +121,7 @@ export function ProgramTable({
             return (
               <div
                 key={i}
-                className={cn(grid, breakpoints ? 'h-9' : 'h-7.5', i === focusRow ? 'bg-cursor-row font-bold' : i % 2 === 1 && 'bg-bar')}
+                className={cn(grid, breakpoints ? 'h-9' : 'h-7.5', i === focusRow ? 'marker' : i % 2 === 1 && 'bg-bar')}
               >
                 {breakpoints && (
                   <button
@@ -132,7 +132,7 @@ export function ProgramTable({
                     className="flex h-9 w-11 items-center justify-center border-0 bg-transparent p-0"
                     onClick={() => breakpoints.onToggle(i)}
                   >
-                    <span className={cn('size-3.5 rounded-full border-2', marked ? 'border-bp bg-bp' : 'border-bp-ring')} />
+                    <span className="sticker" />
                   </button>
                 )}
                 <div>{address}</div>

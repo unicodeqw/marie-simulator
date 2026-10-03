@@ -45,12 +45,12 @@ function ProgramPaper() {
 
 export function SimulatorView() {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-4">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-end gap-7">
         <FrontPanel />
         <Teletype />
       </div>
-      <div className="flex flex-wrap items-start gap-4">
+      <div className="flex flex-wrap items-start gap-7">
         <ProgramPaper />
         <MemoryPanel />
       </div>

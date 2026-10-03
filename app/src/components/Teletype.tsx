@@ -7,12 +7,15 @@ import { MachineInput, RadixSegments, Switch } from './hardware'
 // Декоративна клавіатура в розкладці ASR-33.
 const KEY_ROWS = ['1 2 3 4 5 6 7 8 9 0 -', 'Q W E R T Y U I O P', 'A S D F G H J K L ;', 'Z X C V B N M , . /']
 
-const LABEL = 'silk w-13 text-xs tracking-widest'
+/** Зсув кожного наступного літерного ряду, px. */
+const KEY_STAGGER = 14
+
+const LABEL = 'silk embossed w-12.5 text-xs font-bold tracking-widest'
 
 function Register({ name, value }: { name: string; value: number }) {
   return (
-    <div className="readout ml-auto flex h-8 items-center gap-2 border-0 px-2.5 text-body">
-      <span className="text-silk text-dim">{name}</span>
+    <div className="readout led ml-auto flex h-8.5 items-center gap-2 px-2.5 text-[1.1875rem]">
+      <span className="silk text-dim [text-shadow:none]">{name}</span>
       {hex(value, 4)}
     </div>
   )
@@ -35,22 +38,26 @@ export function Teletype() {
   }, [output])
 
   return (
-    <section aria-label={t.teletype.title} className="tty flex min-w-0 flex-[1_1_25rem] flex-col">
-      <div
-        ref={paper}
-        role="log"
-        aria-label={t.teletype.output}
-        className="mx-7 flex h-56 flex-col overflow-y-auto rounded-t-sm bg-paper px-5 pt-4 pb-3 font-mono text-print leading-normal font-medium break-all whitespace-pre-wrap text-ink"
-      >
-        {/* Свіжий рядок — унизу, біля валика; mt-auto лишає прокручування вгору робочим. */}
-        <div className="mt-auto">{output}</div>
+    <section aria-label={t.teletype.title} className="flex min-w-0 flex-[1_1_25rem] flex-col">
+      <div className="torn-shadow mx-9.5">
+        <div
+          ref={paper}
+          role="log"
+          aria-label={t.teletype.output}
+          className="torn flex h-56 flex-col overflow-y-auto px-6 pt-6 pb-4 font-mono text-print leading-normal font-medium break-all whitespace-pre-wrap"
+        >
+          {/* Свіжий рядок — унизу, біля валика; mt-auto лишає прокручування вгору робочим. */}
+          <div className="mt-auto">{output}</div>
+        </div>
       </div>
-      <div className="rounded-case bg-tty text-ink shadow-[0_3px_0_#000]">
-        <div className="h-3.5 rounded-t-case bg-tty-slot" />
-        <div className="flex flex-col gap-3.5 px-4.5 pt-3.5 pb-4.5">
-          <div className="flex items-baseline justify-between">
-            <div className="font-condensed text-base font-bold tracking-[0.16em] uppercase">{t.teletype.title}</div>
-            <div className="silk font-medium tracking-widest text-tty-dim">{t.teletype.subtitle}</div>
+      <div className="putty rounded-t-xl rounded-b-[1.25rem]">
+        <div className="tty-slot" aria-hidden />
+        <div className="flex flex-col gap-3.5 px-5 pt-3.5 pb-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="tty-plate py-0.5 pr-1.5 pl-3 font-condensed text-body leading-5.5 font-bold tracking-[0.18em] uppercase">
+              {t.teletype.title}
+            </div>
+            <div className="silk embossed tracking-widest text-tty-dim">{t.teletype.subtitle}</div>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
@@ -63,18 +70,14 @@ export function Teletype() {
             <Switch variant="tty" checked={linefeed} onChange={setLinefeed}>
               {t.teletype.linefeed}
             </Switch>
-            <button
-              type="button"
-              className="ml-auto h-11 rounded border border-ink bg-key-cream px-3.5 text-code hover:bg-paper"
-              onClick={clearOutput}
-            >
+            <button type="button" className="btn-cream ml-auto px-3.5 text-code" onClick={clearOutput}>
               {t.teletype.clear}
             </button>
           </div>
 
-          <div className="h-px bg-tty-rule" />
+          <div className="h-0.5 bg-[linear-gradient(180deg,rgb(0_0_0/0.28)_50%,rgb(255_255_255/0.6)_50%)]" aria-hidden />
 
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
             <label htmlFor="tty-in" className={LABEL}>
               {t.teletype.input}
             </label>
@@ -82,27 +85,25 @@ export function Teletype() {
               id="tty-in"
               waiting={waiting}
               placeholder={waiting ? t.teletype.waiting : t.teletype.idle}
-              formClassName="min-w-0 flex-[1_1_7.5rem]"
-              className="h-11 w-full rounded border border-ink bg-paper px-3 font-mono text-body text-ink placeholder:text-tty-hint disabled:bg-tty"
+              formClassName="min-w-0 flex-[1_1_7.5rem] p-1.5"
+              className="paper-field h-11 w-full px-3 font-mono text-body placeholder:text-tty-hint"
               onSubmit={provideInput}
             />
             <RadixSegments label={t.teletype.inputRadix} radix={inputRadix} onChange={setInputRadix} />
             <Register name="IN" value={input} />
           </div>
 
-          <div className="flex flex-col items-center gap-1.5 pt-1.5" aria-hidden>
-            {KEY_ROWS.map((row) => (
-              <div key={row} className="flex gap-1.5">
+          <div className="keys-tray flex flex-col items-center gap-2.5 px-2.5 pt-3.5 pb-4" aria-hidden>
+            {KEY_ROWS.map((row, i) => (
+              <div key={row} className="flex gap-1.5" style={{ paddingLeft: KEY_STAGGER * Math.max(0, i - 1) }}>
                 {row.split(' ').map((k) => (
-                  <span
-                    key={k}
-                    className="flex size-6.5 items-center justify-center rounded-full bg-tty-key font-condensed text-silk font-semibold text-legend shadow-[0_2px_0_var(--color-tty-key-edge)]"
-                  >
+                  <span key={k} className="round-key flex size-6.75 items-center justify-center font-condensed text-silk font-semibold">
                     {k}
                   </span>
                 ))}
               </div>
             ))}
+            <span className="spacebar mt-0.5 h-4.5 w-47.5" />
           </div>
         </div>
       </div>

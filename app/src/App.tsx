@@ -18,10 +18,10 @@ export default function App() {
   useHotkeys(tab, dialog !== null, setDialog)
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="desk flex min-h-dvh flex-col">
       <Header tab={tab} onTab={setTab} onDialog={setDialog} />
       <NoticeBar />
-      <main className="mx-auto w-full max-w-360 p-5">
+      <main className="mx-auto w-full max-w-360 px-6 pt-7 pb-11">
         {/* Редактор лишається змонтованим, щоб не втрачати історію правок і курсор;
             стан машин живе у сховищах, тож їхні екрани монтуються за потреби. */}
         <div hidden={tab !== 'editor'}>

@@ -22,7 +22,7 @@ export function NoticeBar() {
     <div
       role={notice.kind === 'error' ? 'alert' : 'status'}
       className={cn(
-        'flex items-center justify-between gap-4 border-b border-line bg-chrome px-5 py-1 font-medium',
+        'relative z-1 flex items-center justify-between gap-4 border-b border-line bg-chrome px-6 py-1 font-medium',
         notice.kind === 'error' ? 'text-ed-err' : 'text-ed-ok',
       )}
     >

@@ -13,7 +13,7 @@ export type DialogName = 'about' | 'isa' | 'dump'
 
 const TABS: Tab[] = ['editor', 'simulator', 'datapath']
 
-const chromeButton = 'flex h-11 items-center gap-1.5 rounded-md border border-line px-3.5 hover:bg-line/30'
+const chromeButton = 'keycap gap-1.5 px-3.5'
 const menuItem =
   'flex h-10 cursor-pointer items-center justify-between gap-6 rounded-sm px-3 outline-none select-none data-[disabled]:cursor-default data-[disabled]:opacity-45 data-[highlighted]:bg-line/40'
 
@@ -53,19 +53,16 @@ export function Header({
   const report = projectStore.use((s) => s.report)
 
   return (
-    <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line bg-chrome px-5 py-2">
-      <div className="font-condensed text-xl font-bold tracking-[0.16em]">MARIE·16</div>
+    <header className="rail flex flex-wrap items-center gap-x-6 gap-y-2 px-6 pt-2.5 pb-3">
+      <div className="engraved font-condensed text-xl font-bold tracking-[0.16em]">MARIE·16</div>
 
-      <nav aria-label={t.appName} className="flex gap-1">
+      <nav aria-label={t.appName} className="flex gap-2">
         {TABS.map((name) => (
           <button
             key={name}
             type="button"
             aria-current={tab === name ? 'page' : undefined}
-            className={cn(
-              'flex h-11 items-center rounded-md px-4 font-medium',
-              tab === name ? 'bg-tab font-semibold text-tab-fg' : 'hover:bg-line/30',
-            )}
+            className={cn('keycap px-4', tab === name ? 'font-semibold' : 'font-medium')}
             onClick={() => onTab(name)}
           >
             {t.tabs[name]}
@@ -73,7 +70,7 @@ export function Header({
         ))}
       </nav>
 
-      <div className="ml-auto flex flex-wrap gap-1.5">
+      <div className="ml-auto flex flex-wrap gap-2">
         <Menu label={t.menu.file}>
           <DropdownMenu.Item className={menuItem} onSelect={() => discarding(newFile)}>
             {t.menu.new}
