@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["sim-core", "sim-wasm"]
+members = ["sim-core", "sim-wasm", "app/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
