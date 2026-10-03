@@ -9,6 +9,7 @@
     "build": "npm run wasm && tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "oxlint",
+    "test": "npm run wasm && vitest run",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -45,6 +46,7 @@
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
+    "vitest": "^5.0.3",
     "wasm-pack": "^0.15.0"
   }
 }

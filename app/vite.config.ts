@@ -1,7 +1,7 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 // Відносний base, щоб веб-збірка працювала з будь-якого підшляху (наприклад,
 // GitHub Pages) і всередині webview Tauri.
@@ -16,4 +16,5 @@ export default defineConfig({
   server: { port: 5173, strictPort: true },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
   build: { target: 'es2022' },
+  test: { environment: 'node', include: ['tests/**/*.test.ts'] },
 })

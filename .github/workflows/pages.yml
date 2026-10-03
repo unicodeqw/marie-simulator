@@ -1,4 +1,4 @@
-# Тести ядра, збірка веб-версії та публікація на GitHub Pages.
+# Лінт, тести, збірка веб-версії та публікація на GitHub Pages.
 name: Pages
 
 on:
@@ -24,6 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
 
       - uses: actions/setup-node@v7
@@ -32,14 +33,21 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
+      - name: Форматування й лінт Rust
+        run: |
+          cargo fmt --all --check
+          cargo clippy -p sim-core -p sim-wasm --all-targets -- -D warnings
+
       - name: Тести ядра
         run: cargo test -p sim-core
 
       # wasm-pack ставиться разом з npm-залежностями.
-      - name: Збірка веб-версії
+      - name: Лінт, тести й збірка веб-версії
         working-directory: app
         run: |
           npm ci
+          npm run lint
+          npm test
           npm run build
 
       - uses: actions/configure-pages@v6

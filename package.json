@@ -8,7 +8,8 @@
     "desktop": "npm --prefix app run tauri dev",
     "build:web": "npm --prefix app run build",
     "build:desktop": "npm --prefix app run tauri build",
-    "test": "cargo test -p sim-core",
-    "check": "cargo test -p sim-core && npm --prefix app run typecheck && npm --prefix app run lint"
+    "test": "cargo test -p sim-core && npm --prefix app test",
+    "check": "npm run lint && npm test && npm --prefix app run typecheck",
+    "lint": "cargo fmt --all --check && cargo clippy -p sim-core -p sim-wasm --all-targets -- -D warnings && npm --prefix app run lint"
   }
 }
