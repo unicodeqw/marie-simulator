@@ -1,0 +1,273 @@
+@import 'tailwindcss';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans-condensed/500.css';
+@import '@fontsource/ibm-plex-sans-condensed/600.css';
+@import '@fontsource/ibm-plex-sans-condensed/700.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: 'IBM Plex Sans', 'Helvetica Neue', sans-serif;
+  --font-condensed: 'IBM Plex Sans Condensed', 'Arial Narrow', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+
+  /* «Стіл» і шапка — залежать від теми. */
+  --color-desk: var(--desk);
+  --color-chrome: var(--chrome);
+  --color-chrome-fg: var(--chrome-fg);
+  --color-line: var(--line);
+  --color-tab: var(--tab);
+  --color-tab-fg: var(--tab-fg);
+  --color-ed: var(--ed);
+  --color-ed-fg: var(--ed-fg);
+  --color-ed-dim: var(--ed-dim);
+  --color-ed-ok: var(--ed-ok);
+  --color-ed-err: var(--ed-err);
+
+  /* Панель машини — однакова в обох темах. */
+  --color-case: #2b2927;
+  --color-panel: #141312;
+  --color-hair: #5a554b;
+  --color-edge: #6b6455;
+  --color-legend: #e9e2d0;
+  --color-dim: #b9b19d;
+  --color-well: #0a0908;
+  --color-amber: #ffc65c;
+  --color-lamp: #ffe3a1;
+  --color-lamp-off: #2a2018;
+  --color-band-rust: #7a3f2a;
+  --color-band-ochre: #a87b25;
+  --color-key-ochre: #c4902f;
+  --color-key-rust: #9a4e33;
+  --color-key-cream: #e4dcc6;
+
+  /* Телетайп. */
+  --color-tty: #cfc8b2;
+  --color-tty-slot: #3a3833;
+  --color-tty-rule: #a39c86;
+  --color-tty-key: #3f443c;
+  --color-paper: #f3eedd;
+  --color-ink: #2a2620;
+
+  /* Перфопапір лістингу. */
+  --color-fanfold: #f5f2e6;
+  --color-bar: #e2eedb;
+  --color-fan-ink: #23302a;
+  --color-fan-rule: #b9c4b4;
+  --color-fan-dim: #4c5a52;
+  --color-cursor-row: #f2cc6e;
+  --color-bp: #b2321c;
+  --color-bp-ring: #7c897f;
+
+  /* Мнемосхема тракту даних. */
+  --color-bus: #7be08a;
+  --color-bus-off: #2c4a31;
+  --color-ctl: #ff6a5c;
+  --color-ctl-off: #5f7fa8;
+  --color-cu: #f2b8a6;
+  --color-cu-off: #3a2c29;
+  --color-node: #26231d;
+}
+
+:root {
+  --desk: #dedace;
+  --chrome: #f4f1e8;
+  --chrome-fg: #1f1d1a;
+  --line: #b5af9e;
+  --tab: #1f1d1a;
+  --tab-fg: #f4f1e8;
+  --ed: #fbf9f2;
+  --ed-fg: #1f1d1a;
+  --ed-dim: #6a6456;
+  --ed-ok: #2f6b26;
+  --ed-err: #a3281a;
+  --ed-label: #8a5a00;
+  --ed-arg: #9a3f22;
+  --ed-active: #e9e4d4;
+}
+
+.dark {
+  --desk: #100f0e;
+  --chrome: #1b1a18;
+  --chrome-fg: #ece6d6;
+  --line: #4a463f;
+  --tab: #c4902f;
+  --tab-fg: #1a1612;
+  --ed: #191816;
+  --ed-fg: #ece6d6;
+  --ed-dim: #a29b8a;
+  --ed-ok: #9bd38b;
+  --ed-err: #ff8a7e;
+  --ed-label: #e0a93a;
+  --ed-arg: #e58a6a;
+  --ed-active: #2a2722;
+}
+
+body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--chrome-fg);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: 2px;
+}
+
+@layer components {
+  /* Корпус і чорна панель із шовкографією. */
+  .machine {
+    background: var(--color-case);
+    border-radius: 10px;
+    padding: 0.75rem;
+    box-shadow: 0 3px 0 #000;
+  }
+
+  .faceplate {
+    background: var(--color-panel);
+    border: 1px solid var(--color-hair);
+    border-radius: 4px;
+    color: var(--color-legend);
+  }
+
+  .silk {
+    font-family: var(--font-condensed);
+    font-weight: 600;
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .lamp {
+    border-radius: 9999px;
+    background: var(--color-lamp-off);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
+  }
+
+  .lamp[data-on='true'] {
+    background: var(--color-lamp);
+    box-shadow: 0 0 8px 3px rgb(255 196 92 / 0.85);
+  }
+
+  .readout {
+    background: var(--color-well);
+    border: 1px solid var(--color-hair);
+    border-radius: 3px;
+    color: var(--color-amber);
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+
+  .paddle {
+    width: 3.25rem;
+    height: 3.75rem;
+    border: 0;
+    border-radius: 4px 4px 10px 10px;
+    box-shadow:
+      inset 0 -12px 0 rgb(0 0 0 / 0.22),
+      0 3px 0 #000;
+  }
+
+  .paddle:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 -8px 0 rgb(0 0 0 / 0.22),
+      0 1px 0 #000;
+  }
+
+  .paddle:disabled {
+    filter: saturate(0.35) brightness(0.7);
+  }
+
+  /* Аркуш перфопаперу із зеленими смугами. */
+  .fanfold {
+    background: var(--color-fanfold);
+    color: var(--color-fan-ink);
+    border-radius: 3px;
+    box-shadow: 0 3px 0 rgb(0 0 0 / 0.5);
+  }
+
+  .fanfold :focus-visible,
+  .tty :focus-visible {
+    outline-color: var(--color-ink);
+  }
+
+  .slider {
+    width: 100%;
+    height: 2.75rem;
+    margin: 0;
+    accent-color: var(--color-key-ochre);
+  }
+}
+
+/* CodeMirror: кольори беруться з теми застосунку. */
+.cm-editor {
+  height: 100%;
+  background: var(--ed);
+  color: var(--ed-fg);
+  font-size: 0.9375rem;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-editor .cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 1.625rem;
+}
+
+.cm-editor .cm-gutters {
+  background: var(--ed);
+  color: var(--ed-dim);
+  border-right: 1px solid var(--line);
+}
+
+.cm-editor .cm-activeLine,
+.cm-editor .cm-activeLineGutter {
+  background: var(--ed-active);
+}
+
+.cm-editor .cm-cursor {
+  border-left-color: var(--ed-fg);
+}
+
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background: color-mix(in srgb, var(--color-key-ochre) 35%, transparent);
+}
+
+.cm-editor .cm-placeholder {
+  color: var(--ed-dim);
+}
+
+.tok-label {
+  color: var(--ed-label);
+}
+
+.tok-mnemonic {
+  font-weight: 600;
+}
+
+.tok-number {
+  color: var(--ed-arg);
+}
+
+.tok-comment {
+  color: var(--ed-dim);
+}
