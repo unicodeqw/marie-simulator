@@ -3,17 +3,10 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::machine::{Program, ProgramLine};
-use crate::{hex3, hex4};
+use crate::base::{Program, ProgramLine};
+use crate::{ADDR_MASK, INSTRUCTIONS};
 
-const MAX_ADDR: i32 = 4095;
-// Коди директив, як в оригіналі; опкоди команд — 0..=12.
-const DEC: i32 = -1;
-const OCT: i32 = -2;
-const HEX: i32 = -3;
-const ORG: i32 = -4;
-const END: i32 = -5;
-const NOT_FOUND: i32 = i32::MIN;
+const MAX_ADDR: i32 = ADDR_MASK as i32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(rename_all = "camelCase"))]
@@ -51,49 +44,47 @@ impl fmt::Display for AsmError {
     }
 }
 
-/// Один рядок вихідного коду після асемблювання (оригінальний
-/// `AssembledCodeLine`). Поля-рядки зберігають оригінальні заповнювачі:
-/// `line_no` із пробілів означає рядок без коду.
-#[derive(Clone, Debug, PartialEq)]
+/// Слово, яке рядок кладе в пам'ять. `None` у полі — частину не вдалося
+/// зібрати через помилку (у лістингу це `?` і `???`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(rename_all = "camelCase"))]
-pub struct CodeLine {
-    pub line_no: String,
-    pub hex_code: String,
-    pub operand: String,
-    pub source: String,
-    pub label: String,
-    pub mnemonic: String,
-    pub operand_token: String,
-    pub comment: String,
-    pub errors: Vec<AsmError>,
+pub struct Code {
+    pub address: u16,
+    /// Старша тетрада слова.
+    pub opcode: Option<u8>,
+    /// Молодші 12 біт.
+    pub operand: Option<u16>,
 }
 
-impl CodeLine {
-    fn blank(source: &str) -> CodeLine {
-        CodeLine {
-            line_no: "     ".into(),
-            hex_code: " ".into(),
-            operand: " ".into(),
-            source: source.into(),
-            label: " ".into(),
-            mnemonic: " ".into(),
-            operand_token: " ".into(),
-            comment: " ".into(),
-            errors: Vec::new(),
-        }
+impl Code {
+    pub fn word(&self) -> Option<u16> {
+        Some((self.opcode? as u16) << 12 | self.operand?)
     }
+}
 
-    pub fn has_code(&self) -> bool {
-        !self.line_no.starts_with(' ')
-    }
+/// Один рядок вихідного коду після асемблювання.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(rename_all = "camelCase"))]
+pub struct CodeLine {
+    pub source: String,
+    /// `None` — рядок не займає адреси: коментар, порожній, ORG або END.
+    pub code: Option<Code>,
+    pub label: Option<String>,
+    /// Мнемоніка великими літерами, як у лістингу.
+    pub mnemonic: Option<String>,
+    /// Токен операнда: мітка як є, літерал — нормалізований.
+    pub operand: Option<String>,
+    pub comment: Option<String>,
+    pub errors: Vec<AsmError>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(rename_all = "camelCase"))]
 pub struct Symbol {
     pub name: String,
-    pub address: String,
-    pub references: Vec<String>,
+    pub address: u16,
+    /// Адреси команд, що посилаються на символ.
+    pub references: Vec<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -104,8 +95,6 @@ pub struct Assembly {
     /// Відсортовано за іменем.
     pub symbols: Vec<Symbol>,
     pub error_count: usize,
-    /// Ширина колонки мітки в лістингу: 6..=24.
-    pub symbol_width: usize,
 }
 
 impl Assembly {
@@ -117,14 +106,14 @@ impl Assembly {
         let lines = self
             .lines
             .iter()
-            .filter(|l| l.has_code())
             .filter_map(|l| {
+                let code = l.code?;
                 Some(ProgramLine {
-                    address: u16::from_str_radix(&l.line_no, 16).ok()?,
-                    word: u16::from_str_radix(&format!("{}{}", l.hex_code, l.operand), 16).ok()?,
-                    label: l.label.trim().to_string(),
-                    mnemonic: l.mnemonic.trim().to_string(),
-                    operand: l.operand_token.trim().to_string(),
+                    address: code.address,
+                    word: code.word()?,
+                    label: l.label.clone().unwrap_or_default(),
+                    mnemonic: l.mnemonic.clone().unwrap_or_default(),
+                    operand: l.operand.clone().unwrap_or_default(),
                 })
             })
             .collect();
@@ -132,26 +121,34 @@ impl Assembly {
     }
 }
 
-fn instruction(mnemonic: &str) -> Option<(i32, bool)> {
+#[derive(Clone, Copy, PartialEq)]
+enum Directive {
+    Org,
+    Dec,
+    Oct,
+    Hex,
+}
+
+#[derive(Clone, Copy)]
+enum Operation {
+    Instruction { opcode: u8, takes_operand: bool },
+    Constant(Directive),
+    End,
+}
+
+fn operation(mnemonic: &str) -> Option<Operation> {
+    if let Some(opcode) = INSTRUCTIONS.iter().position(|i| i.name.eq_ignore_ascii_case(mnemonic)) {
+        return Some(Operation::Instruction {
+            opcode: opcode as u8,
+            takes_operand: INSTRUCTIONS[opcode].takes_operand,
+        });
+    }
     Some(match mnemonic {
-        "JNS" => (0, true),
-        "LOAD" => (1, true),
-        "STORE" => (2, true),
-        "ADD" => (3, true),
-        "SUBT" => (4, true),
-        "INPUT" => (5, false),
-        "OUTPUT" => (6, false),
-        "HALT" => (7, false),
-        "SKIPCOND" => (8, true),
-        "JUMP" => (9, true),
-        "CLEAR" => (10, false),
-        "ADDI" => (11, true),
-        "JUMPI" => (12, true),
-        "DEC" => (DEC, true),
-        "OCT" => (OCT, true),
-        "HEX" => (HEX, true),
-        "ORG" => (ORG, true),
-        "END" => (END, false),
+        "ORG" => Operation::Constant(Directive::Org),
+        "DEC" => Operation::Constant(Directive::Dec),
+        "OCT" => Operation::Constant(Directive::Oct),
+        "HEX" => Operation::Constant(Directive::Hex),
+        "END" => Operation::End,
         _ => return None,
     })
 }
@@ -161,26 +158,31 @@ fn is_literal(token: &str) -> bool {
     token.starts_with(|c: char| c.is_ascii_digit()) && token.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-// Відхилення від оригіналу: значення, менші за -32768, тут помилка
-// (`validMarieValue` обгортав їх із неправильним знаком).
-fn valid_value(n: i32) -> Option<i32> {
-    match n {
-        -32768..=32767 => Some(n),
-        32768..=65535 => Some(n - 65536),
+// Значення 32768..=65535 приймаються як ті самі 16 біт. Відхилення від
+// оригіналу: менші за -32768 тут помилка (`validMarieValue` обгортав їх із
+// неправильним знаком).
+fn word_value(text: &str, radix: u32) -> Option<u16> {
+    match i32::from_str_radix(text, radix).ok()? {
+        n @ -32768..=65535 => Some(n as u16),
         _ => None,
     }
 }
 
 struct Entry {
-    address: String,
-    references: Vec<String>,
+    address: u16,
+    references: Vec<u16>,
+}
+
+// Рядок після першого проходу: операнд-мітка ще чекає на адресу.
+struct Parsed {
+    line: CodeLine,
+    symbol: Option<String>,
 }
 
 struct Assembler {
     // Адреса поточного оператора; -1 до першого рядка з кодом.
     line_number: i32,
     symbols: HashMap<String, Entry>,
-    max_symbol_len: usize,
     errors: Vec<AsmError>,
     error_count: usize,
     done: bool,
@@ -192,198 +194,194 @@ impl Assembler {
         self.errors.push(e);
     }
 
-    fn statement_label(&mut self, token: &str) -> (String, bool) {
+    // Повертає мітку (якщо вона придатна) і те, чи був перший токен міткою взагалі.
+    fn statement_label(&mut self, token: &str) -> (Option<String>, bool) {
         let Some(i) = token.find(',') else {
-            return (" ".into(), false);
+            return (None, false);
         };
         // Усе після коми в цьому ж токені відкидається, як в оригіналі.
         let symbol = &token[..i];
         if symbol.is_empty() {
-            return (" ".into(), true);
+            return (None, true);
         }
         if symbol.starts_with(|c: char| c.is_ascii_digit()) {
             self.error(AsmError::LabelStartsWithDigit);
-            return (" ".into(), true);
+            return (None, true);
         }
         if self.symbols.contains_key(symbol) {
             self.error(AsmError::DuplicateLabel);
-            return (" ".into(), true);
+            return (None, true);
         }
-        self.symbols.insert(symbol.to_string(), Entry { address: hex3(self.line_number), references: Vec::new() });
-        self.max_symbol_len = self.max_symbol_len.max(symbol.chars().count());
-        (symbol.to_string(), true)
+        self.symbols.insert(symbol.to_string(), Entry { address: self.line_number as u16, references: Vec::new() });
+        (Some(symbol.to_string()), true)
     }
 
-    fn opcode(&mut self, mnemonic: &str, operand_reqd: &mut bool) -> i32 {
-        let Some((code, reqd)) = instruction(mnemonic) else {
-            self.error(AsmError::UnknownInstruction);
-            return NOT_FOUND;
-        };
-        *operand_reqd = reqd;
-        if code == ORG && self.line_number > 0 {
-            self.error(AsmError::OrgNotFirst);
-            return NOT_FOUND;
+    fn operation(&mut self, mnemonic: &str) -> Option<Operation> {
+        match operation(mnemonic) {
+            None => {
+                self.error(AsmError::UnknownInstruction);
+                None
+            }
+            Some(Operation::Constant(Directive::Org)) if self.line_number > 0 => {
+                self.error(AsmError::OrgNotFirst);
+                None
+            }
+            found => found,
         }
-        code
     }
 
-    fn literal(&mut self, kind: i32, text: &str, directive: bool) -> i32 {
-        let (radix, err) = match kind {
-            DEC => (10, AsmError::InvalidDecimal),
-            OCT => (8, AsmError::InvalidOctal),
-            ORG => (16, AsmError::AddressOutOfRange),
-            _ => (16, AsmError::InvalidHex),
+    fn constant(&mut self, directive: Directive, text: &str) -> u16 {
+        let (value, error) = match directive {
+            Directive::Dec => (word_value(text, 10), AsmError::InvalidDecimal),
+            Directive::Oct => (word_value(text, 8), AsmError::InvalidOctal),
+            Directive::Hex => (word_value(text, 16), AsmError::InvalidHex),
+            // Відхилення від оригіналу: ORG поза 000..FFF — помилка.
+            Directive::Org => (word_value(text, 16).filter(|&v| v <= ADDR_MASK), AsmError::AddressOutOfRange),
         };
-        let mut parsed = i32::from_str_radix(text, radix).ok().and_then(valid_value);
-        // Відхилення від оригіналу: ORG поза 000..FFF — помилка.
-        if kind == ORG {
-            parsed = parsed.filter(|v| (0..=MAX_ADDR).contains(v));
-        }
-        let Some(value) = parsed else {
-            self.error(err);
-            return 0;
-        };
-        if !directive && !(0..=MAX_ADDR).contains(&value) {
-            self.error(AsmError::AddressOutOfRange);
-            return 0;
-        }
-        value
+        value.unwrap_or_else(|| {
+            self.error(error);
+            0
+        })
     }
 
-    fn parse_line(&mut self, input: &str) -> CodeLine {
-        let mut line = CodeLine::blank(input);
+    fn address(&mut self, text: &str) -> u16 {
+        match word_value(text, 16) {
+            Some(value) if value <= ADDR_MASK => value,
+            Some(_) => {
+                self.error(AsmError::AddressOutOfRange);
+                0
+            }
+            None => {
+                self.error(AsmError::InvalidHex);
+                0
+            }
+        }
+    }
+
+    fn finish(&mut self, mut line: CodeLine, symbol: Option<String>) -> Parsed {
+        line.errors = std::mem::take(&mut self.errors);
+        Parsed { line, symbol }
+    }
+
+    fn parse_line(&mut self, input: &str) -> Parsed {
+        let mut line = CodeLine { source: input.to_string(), ..CodeLine::default() };
         self.errors.clear();
 
         let code_len = input.find('/').unwrap_or(input.len());
-        if code_len > 0 && code_len < input.len() {
-            line.comment = input[code_len..].to_string();
-        }
         let mut tokens = input[..code_len].split([' ', '\t', '\r', '\x0C']).filter(|t| !t.is_empty());
         let Some(first) = tokens.next() else {
-            line.comment = input.to_string();
-            return line;
+            line.comment = Some(input.to_string());
+            return self.finish(line, None);
         };
+        if code_len < input.len() {
+            line.comment = Some(input[code_len..].to_string());
+        }
 
         self.line_number += 1;
         if self.line_number > MAX_ADDR {
             self.error(AsmError::TooManyLines);
-            line.errors = std::mem::take(&mut self.errors);
             self.done = true;
-            return line;
+            return self.finish(line, None);
         }
 
         let (label, has_label) = self.statement_label(first);
         line.label = label;
 
-        let mut operand_reqd = true;
-        let mut code;
-        if has_label {
-            match tokens.next() {
-                Some(token) => {
-                    line.mnemonic = token.to_uppercase();
-                    code = self.opcode(&line.mnemonic, &mut operand_reqd);
-                }
-                None => {
-                    self.error(AsmError::MissingInstruction);
-                    operand_reqd = false;
-                    code = NOT_FOUND;
-                }
+        let mnemonic = if has_label { tokens.next() } else { Some(first) }.map(str::to_uppercase);
+        let operation = match &mnemonic {
+            Some(m) => self.operation(m),
+            None => {
+                self.error(AsmError::MissingInstruction);
+                None
             }
-        } else {
-            line.mnemonic = first.to_uppercase();
-            code = self.opcode(&line.mnemonic, &mut operand_reqd);
-        }
+        };
+        // Нерозпізнана команда теж «чекає» операнд — так в оригіналі.
+        let takes_operand = match operation {
+            Some(Operation::Instruction { takes_operand, .. }) => takes_operand,
+            Some(Operation::End) => false,
+            Some(Operation::Constant(_)) => true,
+            None => mnemonic.is_some(),
+        };
+        line.mnemonic = mnemonic;
 
-        let mut operand = String::from("000");
-        if operand_reqd {
-            match tokens.next() {
-                Some(token) if (ORG..0).contains(&code) => {
+        let mut opcode = match operation {
+            Some(Operation::Instruction { opcode, .. }) => Some(opcode),
+            _ => None,
+        };
+        let mut operand = Some(0);
+        let mut symbol = None;
+
+        if takes_operand {
+            match (tokens.next(), operation) {
+                (Some(token), Some(Operation::Constant(directive))) => {
                     let upper = token.to_uppercase();
-                    let value = self.literal(code, &upper, true);
-                    line.operand_token = upper;
+                    let value = self.constant(directive, &upper);
+                    line.operand = Some(upper);
                     // ORG із помилкою в рядку генерує слово, як константа (так в оригіналі).
-                    if code > ORG || !self.errors.is_empty() {
-                        let word = hex4(value);
-                        code = i32::from_str_radix(&word[..1], 16).unwrap_or(0);
-                        operand = word[1..].to_string();
-                    } else {
-                        self.line_number = value - 1;
-                        return line;
+                    if directive == Directive::Org && self.errors.is_empty() {
+                        self.line_number = value as i32 - 1;
+                        return self.finish(line, None);
                     }
+                    opcode = Some((value >> 12) as u8);
+                    operand = Some(value & ADDR_MASK);
                 }
-                Some(token) if is_literal(token) => {
-                    let value = self.literal(HEX, token, false);
-                    operand = hex3(value);
-                    line.operand_token = operand.clone();
+                (Some(token), _) if is_literal(token) => {
+                    let value = self.address(token);
+                    operand = Some(value);
+                    line.operand = Some(format!("{value:03X}"));
                 }
-                Some(token) => {
-                    // Символ розв'язується на другому проході.
-                    operand = format!("_{token}");
-                    line.operand_token = token.to_string();
+                (Some(token), _) => {
+                    // Мітка розв'язується на другому проході.
+                    operand = None;
+                    symbol = Some(token.to_string());
+                    line.operand = symbol.clone();
                 }
-                None => {
+                (None, _) => {
                     self.error(AsmError::MissingOperand);
-                    operand = "???".into();
+                    operand = None;
                 }
             }
         }
 
-        line.line_no = hex3(self.line_number);
-        if code >= 0 {
-            line.hex_code = format!("{code:X}");
-        } else if code < -15 {
-            line.hex_code = "?".into();
-        } else if code == END {
-            line.line_no = "   ".into();
-            operand = "   ".into();
+        if let Some(Operation::End) = operation {
             self.done = true;
+        } else {
+            line.code = Some(Code { address: self.line_number as u16, opcode, operand });
         }
-        line.operand = operand;
-        line.errors = std::mem::take(&mut self.errors);
-        line
+        self.finish(line, symbol)
     }
 
-    fn resolve(&mut self, line: &mut CodeLine) {
-        if !line.has_code() {
-            return;
-        }
-        let Some(symbol) = line.operand.strip_prefix('_') else {
-            return;
+    fn resolve(&mut self, parsed: Parsed) -> CodeLine {
+        let Parsed { mut line, symbol } = parsed;
+        let (Some(code), Some(symbol)) = (&mut line.code, symbol) else {
+            return line;
         };
-        match self.symbols.get_mut(symbol) {
+        match self.symbols.get_mut(&symbol) {
             Some(entry) => {
-                entry.references.push(line.line_no.clone());
-                line.operand = entry.address.clone();
+                entry.references.push(code.address);
+                code.operand = Some(entry.address);
             }
             None => {
-                line.operand = "???".into();
                 line.errors.push(AsmError::UndefinedOperand);
                 self.error_count += 1;
             }
         }
+        line
     }
 }
 
 pub fn assemble(source: &str) -> Assembly {
-    let mut asm = Assembler {
-        line_number: -1,
-        symbols: HashMap::new(),
-        max_symbol_len: 0,
-        errors: Vec::new(),
-        error_count: 0,
-        done: false,
-    };
+    let mut asm =
+        Assembler { line_number: -1, symbols: HashMap::new(), errors: Vec::new(), error_count: 0, done: false };
 
-    let mut lines = Vec::new();
+    let mut parsed = Vec::new();
     for input in source.lines() {
-        lines.push(asm.parse_line(input));
+        parsed.push(asm.parse_line(input));
         if asm.done {
             break;
         }
     }
-    for line in &mut lines {
-        asm.resolve(line);
-    }
+    let lines = parsed.into_iter().map(|p| asm.resolve(p)).collect();
 
     let mut symbols: Vec<Symbol> = asm
         .symbols
@@ -392,19 +390,16 @@ pub fn assemble(source: &str) -> Assembly {
         .collect();
     symbols.sort_by(|a, b| a.name.cmp(&b.name));
 
-    Assembly { lines, symbols, error_count: asm.error_count, symbol_width: asm.max_symbol_len.clamp(6, 24) }
+    Assembly { lines, symbols, error_count: asm.error_count }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn words(asm: &Assembly) -> Vec<(String, String)> {
-        asm.lines
-            .iter()
-            .filter(|l| l.has_code())
-            .map(|l| (l.line_no.clone(), format!("{}{}", l.hex_code, l.operand)))
-            .collect()
+    // (адреса, слово) для рядків, що зібралися повністю.
+    fn words(asm: &Assembly) -> Vec<(u16, u16)> {
+        asm.lines.iter().filter_map(|l| l.code).filter_map(|c| Some((c.address, c.word()?))).collect()
     }
 
     fn errors(source: &str) -> Vec<AsmError> {
@@ -429,40 +424,42 @@ One,    DEC 1
     fn assembles_program_with_org_and_labels() {
         let asm = assemble(COUNTDOWN);
         assert_eq!(asm.error_count, 0);
-        let expected = [
-            ("100", "1107"),
-            ("101", "6000"),
-            ("102", "4108"),
-            ("103", "2107"),
-            ("104", "8400"),
-            ("105", "9100"),
-            ("106", "7000"),
-            ("107", "0005"),
-            ("108", "0001"),
-        ];
-        let got = words(&asm);
-        assert_eq!(got.len(), expected.len());
-        for ((addr, word), (a, w)) in got.iter().zip(expected) {
-            assert_eq!((addr.as_str(), word.as_str()), (a, w));
-        }
-        let names: Vec<_> = asm.symbols.iter().map(|s| (s.name.as_str(), s.address.as_str())).collect();
-        assert_eq!(names, [("Count", "107"), ("Loop", "100"), ("One", "108")]);
-        assert_eq!(asm.symbols[0].references, ["100", "103"]);
+        assert_eq!(
+            words(&asm),
+            [
+                (0x100, 0x1107),
+                (0x101, 0x6000),
+                (0x102, 0x4108),
+                (0x103, 0x2107),
+                (0x104, 0x8400),
+                (0x105, 0x9100),
+                (0x106, 0x7000),
+                (0x107, 0x0005),
+                (0x108, 0x0001),
+            ]
+        );
+        let names: Vec<_> = asm.symbols.iter().map(|s| (s.name.as_str(), s.address)).collect();
+        assert_eq!(names, [("Count", 0x107), ("Loop", 0x100), ("One", 0x108)]);
+        assert_eq!(asm.symbols[0].references, [0x100, 0x103]);
 
         let program = asm.program().unwrap();
-        assert_eq!(program.lines[0], ProgramLine {
-            address: 0x100,
-            word: 0x1107,
-            label: "Loop".into(),
-            mnemonic: "LOAD".into(),
-            operand: "Count".into(),
-        });
+        assert_eq!(
+            program.lines[0],
+            ProgramLine {
+                address: 0x100,
+                word: 0x1107,
+                label: "Loop".into(),
+                mnemonic: "LOAD".into(),
+                operand: "Count".into(),
+            }
+        );
+        assert_eq!(program.lines[1].operand, "");
     }
 
     #[test]
     fn starts_at_zero_without_org() {
         let asm = assemble("Load X\nHalt\nX, DEC 7\n");
-        assert_eq!(words(&asm), [("000".into(), "1002".into()), ("001".into(), "7000".into()), ("002".into(), "0007".into())]);
+        assert_eq!(words(&asm), [(0, 0x1002), (1, 0x7000), (2, 0x0007)]);
     }
 
     #[test]
@@ -475,7 +472,8 @@ One,    DEC 1
     fn address_literal_needs_leading_digit() {
         let asm = assemble("Add 0F00\nHalt\n");
         assert_eq!(asm.error_count, 0);
-        assert_eq!(asm.lines[0].operand, "F00");
+        assert_eq!(asm.lines[0].code.unwrap().operand, Some(0xF00));
+        assert_eq!(asm.lines[0].operand.as_deref(), Some("F00"));
         // `F00` без нуля — це пошук мітки.
         assert_eq!(errors("Add F00\n"), [AsmError::UndefinedOperand]);
         assert_eq!(errors("Add 1000\n"), [AsmError::AddressOutOfRange]);
@@ -487,7 +485,7 @@ One,    DEC 1
         let asm = assemble("DEC -1\nDEC 32767\nDEC -32768\nDEC 65535\nOCT 17\nHEX BABE\nHEX -1\n");
         assert_eq!(asm.error_count, 0);
         let got: Vec<_> = words(&asm).into_iter().map(|(_, w)| w).collect();
-        assert_eq!(got, ["FFFF", "7FFF", "8000", "FFFF", "000F", "BABE", "FFFF"]);
+        assert_eq!(got, [0xFFFF, 0x7FFF, 0x8000, 0xFFFF, 0x000F, 0xBABE, 0xFFFF]);
 
         assert_eq!(errors("OCT 0900\n"), [AsmError::InvalidOctal]);
         assert_eq!(errors("DEC 65536\n"), [AsmError::InvalidDecimal]);
@@ -503,7 +501,8 @@ One,    DEC 1
         // Коментар перед ORG не рахується.
         assert!(errors("/ c\n\nORG 0FF\nHalt\n").is_empty());
         let asm = assemble("ORG FFF\nHalt\n");
-        assert_eq!(words(&asm), [("FFF".into(), "7000".into())]);
+        assert_eq!(words(&asm), [(0xFFF, 0x7000)]);
+        assert_eq!(asm.lines[0].code, None);
     }
 
     #[test]
@@ -520,6 +519,7 @@ One,    DEC 1
         assert_eq!(errors("Load\n"), [AsmError::MissingOperand]);
         assert_eq!(errors("Foo\n"), [AsmError::UnknownInstruction, AsmError::MissingOperand]);
         assert_eq!(errors("Skipcond\n"), [AsmError::MissingOperand]);
+        assert_eq!(errors("DEC\n"), [AsmError::MissingOperand]);
         // Зайві токени ігноруються.
         assert!(errors("Halt 5\nClear x y\n").is_empty());
     }
@@ -529,30 +529,29 @@ One,    DEC 1
         let asm = assemble("Halt\nEND\nFoo bar\n");
         assert_eq!(asm.error_count, 0);
         assert_eq!(asm.lines.len(), 2);
-        assert!(!asm.lines[1].has_code());
+        assert_eq!(asm.lines[1].code, None);
         assert_eq!(asm.program().unwrap().lines.len(), 1);
     }
 
     #[test]
     fn comments_and_blank_lines_take_no_address() {
         let asm = assemble("/ only comment\n\n   \nHalt / stop\n");
-        assert_eq!(asm.lines[0].comment, "/ only comment");
-        assert_eq!(asm.lines[3].comment, "/ stop");
-        assert_eq!(words(&asm), [("000".into(), "7000".into())]);
+        assert_eq!(asm.lines[0].comment.as_deref(), Some("/ only comment"));
+        assert_eq!(asm.lines[3].comment.as_deref(), Some("/ stop"));
+        assert_eq!(words(&asm), [(0, 0x7000)]);
     }
 
     #[test]
     fn errors_block_program() {
         let asm = assemble("Load X\n");
         assert_eq!(asm.error_count, 1);
-        assert_eq!(asm.lines[0].operand, "???");
+        assert_eq!(asm.lines[0].code, Some(Code { address: 0, opcode: Some(1), operand: None }));
         assert!(asm.program().is_none());
     }
 
     #[test]
     fn too_many_lines() {
-        let source = "ORG FFF\nHalt\nHalt\nHalt\n";
-        let asm = assemble(source);
+        let asm = assemble("ORG FFF\nHalt\nHalt\nHalt\n");
         assert_eq!(asm.lines.len(), 3);
         assert_eq!(asm.lines[2].errors, [AsmError::TooManyLines]);
     }

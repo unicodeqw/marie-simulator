@@ -1,21 +1,38 @@
 //! WebAssembly-обгортка над `sim-core`. Після кожної дії інтерфейс сам
-//! перечитує `snapshot()`, тож методи керування нічого не повертають.
+//! перечитує `snapshot()`; методи виконання повертають лише, чи готова
+//! машина до наступної команди.
 
 use serde::Serialize;
-use sim_core::{CodeLine, Machine, Program, Radix, RegisterRadix, Symbol};
+use sim_core::{CodeLine, Instruction, Machine, Program, Radix, RegisterRadix, State, Symbol};
 use wasm_bindgen::prelude::*;
 
 fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsError> {
-    // json_compatible: None → null, u64 → number.
+    // json_compatible: None → null, u64 → number, flatten → звичайний об'єкт.
     Ok(value.serialize(&serde_wasm_bindgen::Serializer::json_compatible())?)
 }
 
-fn radix(name: &str) -> Radix {
-    match name {
-        "dec" => Radix::Dec,
-        "ascii" => Radix::Ascii,
-        _ => Radix::Hex,
-    }
+// Назви ті самі, що серіалізує `Radix`: "hex", "dec", "ascii".
+fn radix(name: &str) -> Result<Radix, JsError> {
+    Ok(serde_wasm_bindgen::from_value(JsValue::from_str(name))?)
+}
+
+#[derive(Serialize)]
+struct InstructionSet {
+    instructions: &'static [Instruction],
+    directives: &'static [&'static str],
+}
+
+/// Система команд і директиви асемблера — єдине джерело для інтерфейсу.
+#[wasm_bindgen(js_name = instructionSet)]
+pub fn instruction_set() -> Result<JsValue, JsError> {
+    to_js(&InstructionSet { instructions: &sim_core::INSTRUCTIONS, directives: &sim_core::DIRECTIVES })
+}
+
+/// Значення регістра в системі числення `radix`; `address` — 12-бітні PC і MAR.
+#[wasm_bindgen(js_name = formatWord)]
+pub fn format_word(value: u16, radix_name: &str, address: bool) -> Result<String, JsError> {
+    let radix = radix(radix_name)?;
+    Ok(if address { sim_core::format_address(value, radix) } else { sim_core::format_word(value, radix) })
 }
 
 #[derive(Serialize)]
@@ -81,11 +98,13 @@ impl Simulator {
     pub fn reset(&mut self) {
         self.m.reset();
     }
-    pub fn step(&mut self) {
-        self.m.step();
+    /// Одна команда; `true` — машина готова до наступної.
+    pub fn step(&mut self) -> bool {
+        self.m.step() == State::Ready
     }
-    pub fn run(&mut self, max: u32, breakpoints: bool) {
-        self.m.run(max, breakpoints);
+    /// До `max` команд; `true` — машина готова продовжувати.
+    pub fn run(&mut self, max: u32, breakpoints: bool) -> bool {
+        self.m.run(max, breakpoints) == State::Ready
     }
     #[wasm_bindgen(js_name = provideInput)]
     pub fn provide_input(&mut self, text: &str) {
@@ -102,24 +121,27 @@ impl Simulator {
     }
 
     #[wasm_bindgen(js_name = setInputRadix)]
-    pub fn set_input_radix(&mut self, name: &str) {
-        self.m.input_radix = radix(name);
+    pub fn set_input_radix(&mut self, name: &str) -> Result<(), JsError> {
+        self.m.set_input_radix(radix(name)?);
+        Ok(())
     }
     #[wasm_bindgen(js_name = setOutputRadix)]
-    pub fn set_output_radix(&mut self, name: &str) {
-        self.m.output_radix = radix(name);
+    pub fn set_output_radix(&mut self, name: &str) -> Result<(), JsError> {
+        self.m.set_output_radix(radix(name)?);
+        Ok(())
     }
     #[wasm_bindgen(js_name = setOutputLinefeed)]
     pub fn set_output_linefeed(&mut self, on: bool) {
-        self.m.output_linefeed = on;
+        self.m.set_output_linefeed(on);
     }
     #[wasm_bindgen(js_name = clearOutput)]
     pub fn clear_output(&mut self) {
         self.m.clear_output();
     }
+    /// Текст виводу, починаючи зі значення номер `from`.
     #[wasm_bindgen(js_name = outputText)]
-    pub fn output_text(&self) -> String {
-        self.m.output_text()
+    pub fn output_text(&self, from: usize) -> String {
+        self.m.output_text(from)
     }
 
     pub fn snapshot(&self) -> Result<JsValue, JsError> {
@@ -130,11 +152,18 @@ impl Simulator {
     }
     /// Копія всієї пам'яті (4096 слів) як `Uint16Array`.
     pub fn memory(&self) -> Vec<u16> {
-        self.m.cpu().mem.clone()
+        self.m.memory().to_vec()
     }
 
     #[wasm_bindgen(js_name = coreDump)]
-    pub fn core_dump(&self, title: &str, timestamp: &str, start: u16, end: u16, radix: JsValue) -> Result<String, JsError> {
+    pub fn core_dump(
+        &self,
+        title: &str,
+        timestamp: &str,
+        start: u16,
+        end: u16,
+        radix: JsValue,
+    ) -> Result<String, JsError> {
         let radix: RegisterRadix = serde_wasm_bindgen::from_value(radix)?;
         Ok(sim_core::core_dump(&self.m, title, timestamp, start, end, radix))
     }
@@ -171,8 +200,9 @@ impl DataPath {
         self.d.provide_input(text);
     }
     #[wasm_bindgen(js_name = setInputRadix)]
-    pub fn set_input_radix(&mut self, name: &str) {
-        self.d.input_radix = radix(name);
+    pub fn set_input_radix(&mut self, name: &str) -> Result<(), JsError> {
+        self.d.set_input_radix(radix(name)?);
+        Ok(())
     }
 
     pub fn snapshot(&self) -> Result<JsValue, JsError> {
@@ -181,12 +211,12 @@ impl DataPath {
     pub fn program(&self) -> Result<JsValue, JsError> {
         to_js(self.d.program())
     }
+    /// Рядки трасування з номера `from` (від рестарту); зберігаються лише останні.
+    pub fn trace(&self, from: usize) -> Vec<String> {
+        self.d.trace(from).map(str::to_string).collect()
+    }
     /// Слово пам'яті за адресою (для показу M[MAR] на схемі).
     pub fn peek(&self, address: u16) -> u16 {
-        self.d.cpu().mem[(address & sim_core::ADDR_MASK) as usize]
-    }
-    /// Рядки трасування, починаючи з `from`.
-    pub fn trace(&self, from: usize) -> Vec<String> {
-        self.d.trace(from).to_vec()
+        self.d.memory()[(address & sim_core::ADDR_MASK) as usize]
     }
 }

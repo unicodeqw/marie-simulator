@@ -1,6 +1,6 @@
 //! Тексти `.lst` і `.map` у форматі оригінального асемблера.
 
-use crate::assembler::Assembly;
+use crate::assembler::{Assembly, Code};
 
 const INDENT: &str = "         ";
 
@@ -8,26 +8,43 @@ const INDENT: &str = "         ";
 fn pad(s: &str, size: usize) -> String {
     let mut out: String = s.chars().take(size).collect();
     let len = out.chars().count();
-    out.extend(std::iter::repeat_n(' ', size - len));
+    out.push_str(&" ".repeat(size - len));
     out
+}
+
+// Ширина колонки символу: найдовша мітка, але в межах 6..=24.
+fn label_width(asm: &Assembly) -> usize {
+    asm.symbols.iter().map(|s| s.name.chars().count()).max().unwrap_or(0).clamp(6, 24)
+}
+
+// Адреса й слово: `100 1107`; незібрані частини — `?` і `???`, рядок без коду — пробіли.
+fn code_columns(code: Option<Code>) -> String {
+    let Some(code) = code else {
+        return " ".repeat(8);
+    };
+    let opcode = code.opcode.map_or("?".into(), |o| format!("{o:X}"));
+    let operand = code.operand.map_or("???".into(), |o| format!("{o:03X}"));
+    format!("{:03X} {opcode}{operand}", code.address)
 }
 
 /// Лістинг із таблицею символів. `file_name` і `timestamp` ідуть у заголовок.
 pub fn listing(asm: &Assembly, file_name: &str, timestamp: &str) -> String {
-    let w = asm.symbol_width;
+    let w = label_width(asm);
+    // Скільки символів додається до ширини мітки в рамках таблиці.
+    let extra = w - 5;
     let mut out = format!("     Assembly listing for: {file_name}\n                Assembled: {timestamp}\n\n");
 
     for l in &asm.lines {
-        let operand_width = (w + 9).saturating_sub(l.mnemonic.chars().count());
+        // Порожні поля оригінал друкував одним пробілом.
+        let mnemonic = l.mnemonic.as_deref().unwrap_or(" ");
+        let operand_width = (w + 9).saturating_sub(mnemonic.chars().count());
         out += &format!(
-            "{} {}{} |  {} {} {} {}\n",
-            l.line_no,
-            l.hex_code,
-            l.operand,
-            pad(&l.label, w),
-            l.mnemonic,
-            pad(&l.operand_token, operand_width),
-            l.comment
+            "{} |  {} {} {} {}\n",
+            code_columns(l.code),
+            pad(l.label.as_deref().unwrap_or(""), w),
+            mnemonic,
+            pad(l.operand.as_deref().unwrap_or(""), operand_width),
+            l.comment.as_deref().unwrap_or(" ")
         );
         for e in &l.errors {
             out += &format!("   **** {e}\n");
@@ -41,21 +58,21 @@ pub fn listing(asm: &Assembly, file_name: &str, timestamp: &str) -> String {
         n => format!("{n} errors found.  Assembly unsuccessful.\n"),
     };
 
-    let rule = format!("{INDENT}-------{}------------------------------------------\n", "-".repeat(w - 5));
+    let rule = format!("{INDENT}-------{}------------------------------------------\n", "-".repeat(extra));
     out += &format!("\n{INDENT}SYMBOL TABLE\n{rule}");
-    out += &format!("{INDENT} Symbol{}| Defined | References \n", " ".repeat(w - 5));
-    out += &format!("{INDENT}-------{}+---------+-------------------------------", "-".repeat(w - 5));
+    out += &format!("{INDENT} Symbol{}| Defined | References \n", " ".repeat(extra));
+    out += &format!("{INDENT}-------{}+---------+-------------------------------", "-".repeat(extra));
     for s in &asm.symbols {
-        out += &format!("\n{INDENT} {} |   {}   | ", pad(&s.name, w), s.address);
+        out += &format!("\n{INDENT} {} |   {:03X}   | ", pad(&s.name, w), s.address);
         for (i, r) in s.references.iter().enumerate() {
             if i > 0 {
                 out += ", ";
                 // Після кожних шести посилань — новий рядок таблиці.
                 if i % 6 == 0 {
-                    out += &format!("\n{INDENT}{}  |{INDENT}| ", pad(" ", w));
+                    out += &format!("\n{INDENT}{}  |{INDENT}| ", pad("", w));
                 }
             }
-            out += r;
+            out += &format!("{r:03X}");
         }
     }
     out += &format!("\n{rule}\n");
@@ -67,12 +84,12 @@ pub fn symbol_map(asm: &Assembly) -> Option<String> {
     if asm.error_count > 0 {
         return None;
     }
-    let w = asm.symbol_width;
+    let w = label_width(asm);
     let mut out = format!(" -----{}----------\n", "-".repeat(w - 4));
     out += &format!(" Symbol{}| Location\n", " ".repeat(w - 5));
     out += &format!(" -----{}+---------", "-".repeat(w - 4));
     for s in &asm.symbols {
-        out += &format!("\n {} |   {}", pad(&s.name, w), s.address);
+        out += &format!("\n {} |   {:03X}", pad(&s.name, w), s.address);
     }
     out.push('\n');
     Some(out)
@@ -127,7 +144,10 @@ mod tests {
     fn references_wrap_after_six() {
         let source = "X, DEC 1\n".to_string() + &"Load X\n".repeat(8);
         let text = listing(&assemble(&source), "x.mas", "");
-        let row = format!("{INDENT} X      |   000   | 001, 002, 003, 004, 005, 006, \n{INDENT}{:6}  |{INDENT}| 007, 008\n", "");
+        let row = format!(
+            "{INDENT} X      |   000   | 001, 002, 003, 004, 005, 006, \n{INDENT}{:6}  |{INDENT}| 007, 008\n",
+            ""
+        );
         assert!(text.contains(&row), "{text}");
     }
 

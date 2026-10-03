@@ -2,26 +2,54 @@
 //! Порт MarieSim v1.3.01 (Null & Lobur); поведінку звірено з Java-сирцями.
 
 mod assembler;
+mod base;
 mod datapath;
 mod dump;
 mod listing;
 mod machine;
 mod mex;
 
-pub use assembler::{assemble, AsmError, Assembly, CodeLine, Symbol};
+pub use assembler::{assemble, AsmError, Assembly, Code, CodeLine, Symbol};
+pub use base::{Cpu, Fault, Program, ProgramLine, Registers, State};
 pub use datapath::{DataPath, DataPathSnapshot, Frame, Part, Phase, Wait};
 pub use dump::{core_dump, RegisterRadix};
 pub use listing::{listing, symbol_map};
-pub use machine::{Cpu, Fault, Machine, Program, ProgramLine, Snapshot, State};
+pub use machine::{Machine, Snapshot};
 pub use mex::{read_mex, MexError, MexFile};
 
 pub const MEM_SIZE: usize = 4096;
 pub const ADDR_MASK: u16 = 0x0FFF;
 
-/// Мнемоніки за кодом операції (0..=C).
-pub const MNEMONICS: [&str; 13] = [
-    "JNS", "LOAD", "STORE", "ADD", "SUBT", "INPUT", "OUTPUT", "HALT", "SKIPCOND", "JUMP", "CLEAR", "ADDI", "JUMPI",
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(rename_all = "camelCase"))]
+pub struct Instruction {
+    pub name: &'static str,
+    /// Чи вимагає асемблер операнд після мнемоніки.
+    pub takes_operand: bool,
+}
+
+const fn instruction(name: &'static str, takes_operand: bool) -> Instruction {
+    Instruction { name, takes_operand }
+}
+
+/// Система команд; індекс у масиві — код операції.
+pub const INSTRUCTIONS: [Instruction; 13] = [
+    instruction("JnS", true),
+    instruction("Load", true),
+    instruction("Store", true),
+    instruction("Add", true),
+    instruction("Subt", true),
+    instruction("Input", false),
+    instruction("Output", false),
+    instruction("Halt", false),
+    instruction("Skipcond", true),
+    instruction("Jump", true),
+    instruction("Clear", false),
+    instruction("AddI", true),
+    instruction("JumpI", true),
 ];
+
+pub const DIRECTIVES: [&str; 5] = ["ORG", "DEC", "OCT", "HEX", "END"];
 
 pub mod op {
     pub const JNS: u16 = 0x0;
@@ -59,7 +87,7 @@ pub fn parse_word(text: &str, radix: Radix) -> Option<u16> {
     }
 }
 
-/// Значення слова для показу; у режимі ASCII нуль дає порожній рядок.
+/// Значення 16-бітного слова для показу; у режимі ASCII нуль дає порожній рядок.
 pub fn format_word(value: u16, radix: Radix) -> String {
     match radix {
         Radix::Hex => format!("{value:04X}"),
@@ -71,16 +99,12 @@ pub fn format_word(value: u16, radix: Radix) -> String {
     }
 }
 
-// Оригінальні `to3CharHexStr`/`to4CharHexStr`: довші рядки обрізаються зліва
-// направо, тобто лишаються *старші* цифри.
-pub(crate) fn hex3(number: i32) -> String {
-    let n = if number < 0 { (number as u32) << 20 } else { number as u32 };
-    format!("{n:03X}").chars().take(3).collect()
-}
-
-pub(crate) fn hex4(number: i32) -> String {
-    let n = if number < 0 { (number as u32) << 16 } else { number as u32 };
-    format!("{n:04X}").chars().take(4).collect()
+/// Те саме для 12-бітних PC і MAR: у HEX три цифри.
+pub fn format_address(value: u16, radix: Radix) -> String {
+    match radix {
+        Radix::Hex => format!("{value:03X}"),
+        _ => format_word(value, radix),
+    }
 }
 
 #[cfg(test)]
@@ -105,15 +129,14 @@ mod tests {
         assert_eq!(format_word(0, Radix::Ascii), "");
         assert_eq!(format_word(0xFFFF, Radix::Dec), "-1");
         assert_eq!(format_word(0x1A, Radix::Hex), "001A");
+        assert_eq!(format_address(0x1A, Radix::Hex), "01A");
+        assert_eq!(format_address(0x1A, Radix::Dec), "26");
     }
 
     #[test]
-    fn hex_helpers_follow_original() {
-        assert_eq!(hex3(0x107), "107");
-        assert_eq!(hex3(5), "005");
-        assert_eq!(hex3(-1), "FFF");
-        assert_eq!(hex4(-1), "FFFF");
-        assert_eq!(hex4(-32768), "8000");
-        assert_eq!(hex4(0x1F), "001F");
+    fn opcodes_index_the_instruction_table() {
+        assert_eq!(INSTRUCTIONS[op::JNS as usize].name, "JnS");
+        assert_eq!(INSTRUCTIONS[op::SKIPCOND as usize].name, "Skipcond");
+        assert_eq!(INSTRUCTIONS[op::JUMPI as usize].name, "JumpI");
     }
 }

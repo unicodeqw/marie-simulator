@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::machine::{Program, ProgramLine};
+use crate::base::{Program, ProgramLine};
 
 const TC_NULL: u8 = 0x70;
 const TC_REFERENCE: u8 = 0x71;
@@ -379,13 +379,16 @@ mod tests {
     fn reads_program_and_source() {
         let mex = read_mex(&sample()).unwrap();
         assert_eq!(mex.program.lines.len(), 3);
-        assert_eq!(mex.program.lines[0], ProgramLine {
-            address: 0x100,
-            word: 0x1102,
-            label: "Go".into(),
-            mnemonic: "LOAD".into(),
-            operand: "X".into(),
-        });
+        assert_eq!(
+            mex.program.lines[0],
+            ProgramLine {
+                address: 0x100,
+                word: 0x1102,
+                label: "Go".into(),
+                mnemonic: "LOAD".into(),
+                operand: "X".into(),
+            }
+        );
         assert_eq!(mex.program.lines[2].word, 7);
         assert_eq!(mex.source, "/ demo\n\tORG 100\nGo,\tLoad X\t/ load\n\tHalt\nX,\tDec 7\n");
     }

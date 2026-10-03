@@ -7,8 +7,12 @@
 
 use std::collections::VecDeque;
 
-use crate::machine::{Cpu, Fault, Program, State};
-use crate::{op, parse_word, Radix, ADDR_MASK};
+use self::Part::{Ac, In, Ir, Mar, Mbr, Memory, Out, Pc};
+use crate::base::{Base, Cpu, Fault, Program, Registers, State};
+use crate::{op, Radix, ADDR_MASK};
+
+/// Скільки останніх рядків трасування зберігається.
+const TRACE_LIMIT: usize = 5000;
 
 /// Вузли тракту; числове значення — код на лініях вибору (як в оригіналі).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,6 +26,10 @@ pub enum Part {
     In = 5,
     Out = 6,
     Ir = 7,
+}
+
+const fn bit(part: Part) -> u8 {
+    1 << part as u8
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -97,59 +105,97 @@ struct Micro {
     write: Option<Part>,
     read: Option<Part>,
     aux: [bool; 4],
-    parts: &'static [Part],
+    active: u8,
     alu: bool,
     bus: bool,
     xfer: Xfer,
 }
 
 const NO_AUX: [bool; 4] = [false; 4];
-const AC_MBR: [bool; 4] = [true, false, false, false];
-const MAR_MEM: [bool; 4] = [false, true, false, false];
-const VIA_ALU: [bool; 4] = [false, false, true, true];
 
-use Part::*;
-
-const fn bus(rtl: &'static str, write: Part, read: Part, parts: &'static [Part], xfer: Xfer) -> Micro {
-    Micro { rtl, write: Some(write), read: Some(read), aux: NO_AUX, parts, alu: false, bus: true, xfer }
+/// Передача між регістрами через шину: коди на лініях запису й читання.
+const fn bus(rtl: &'static str, write: Part, read: Part, xfer: Xfer) -> Micro {
+    Micro {
+        rtl,
+        write: Some(write),
+        read: Some(read),
+        aux: NO_AUX,
+        active: bit(write) | bit(read),
+        alu: false,
+        bus: true,
+        xfer,
+    }
 }
 
-const fn mem(rtl: &'static str, write: Part, read: Part, parts: &'static [Part], xfer: Xfer) -> Micro {
-    Micro { rtl, write: Some(write), read: Some(read), aux: MAR_MEM, parts, alu: false, bus: true, xfer }
+/// Обмін із пам'яттю за адресою з MAR (лінія 7).
+const fn memory(rtl: &'static str, write: Part, read: Part, xfer: Xfer) -> Micro {
+    Micro { aux: [false, true, false, false], active: bit(write) | bit(read) | bit(Mar), ..bus(rtl, write, read, xfer) }
 }
 
+/// AC і MBR через ALU (лінії 8 і 9).
 const fn alu(rtl: &'static str, xfer: Xfer) -> Micro {
-    Micro { rtl, write: None, read: None, aux: VIA_ALU, parts: &[Ac, Mbr], alu: true, bus: false, xfer }
+    Micro {
+        rtl,
+        write: None,
+        read: None,
+        aux: [false, false, true, true],
+        active: bit(Ac) | bit(Mbr),
+        alu: true,
+        bus: false,
+        xfer,
+    }
 }
 
-const MAR_PC: Micro = bus("MAR ← PC", Mar, Pc, &[Pc, Mar], Xfer::MarFromPc);
-const IR_MEM: Micro = mem("IR ← M[MAR]", Ir, Memory, &[Memory, Mar, Ir], Xfer::IrFromMem);
-const PC_INC: Micro =
-    Micro { rtl: "PC ← PC + 1", write: None, read: None, aux: NO_AUX, parts: &[Pc], alu: false, bus: false, xfer: Xfer::PcInc };
-const MAR_IR: Micro = bus("MAR ← IR[11-0]", Mar, Ir, &[Ir, Mar], Xfer::MarFromIr);
-const MBR_MEM: Micro = mem("MBR ← M[MAR]", Mbr, Memory, &[Memory, Mar, Mbr], Xfer::MbrFromMem);
-const MEM_MBR: Micro = mem("M[MAR] ← MBR", Memory, Mbr, &[Memory, Mar, Mbr], Xfer::MemFromMbr);
-const ADD: Micro = alu("AC ← AC + MBR", Xfer::AcAddMbr);
-const SUB: Micro = alu("AC ← AC − MBR", Xfer::AcSubMbr);
-const AC_MBR_DIRECT: Micro =
-    Micro { rtl: "AC ← MBR", write: None, read: None, aux: AC_MBR, parts: &[Ac, Mbr], alu: false, bus: false, xfer: Xfer::AcFromMbr };
-const MBR_AC_DIRECT: Micro =
-    Micro { rtl: "MBR ← AC", write: None, read: None, aux: AC_MBR, parts: &[Ac, Mbr], alu: false, bus: false, xfer: Xfer::MbrFromAc };
-
-fn mask(parts: &[Part]) -> u8 {
-    parts.iter().fold(0, |m, &p| m | 1 << p as u8)
+/// AC і MBR напряму (лінія 6).
+const fn direct(rtl: &'static str, xfer: Xfer) -> Micro {
+    Micro { aux: [true, false, false, false], alu: false, ..alu(rtl, xfer) }
 }
 
-fn input_frame(xfer: Xfer) -> Frame {
+/// Зміна одного регістра без джерела на шині.
+const fn set(rtl: &'static str, part: Part, xfer: Xfer) -> Micro {
+    Micro { rtl, write: Some(part), read: None, aux: NO_AUX, active: bit(part), alu: false, bus: false, xfer }
+}
+
+const MAR_PC: Micro = bus("MAR ← PC", Mar, Pc, Xfer::MarFromPc);
+const IR_MEM: Micro = memory("IR ← M[MAR]", Ir, Memory, Xfer::IrFromMem);
+// У вибірці PC збільшується без участі пристрою керування, як в оригіналі.
+const PC_INC: Micro = Micro { write: None, ..SKIP };
+const SKIP: Micro = set("PC ← PC + 1", Pc, Xfer::PcInc);
+const MAR_IR: Micro = bus("MAR ← IR[11-0]", Mar, Ir, Xfer::MarFromIr);
+const MBR_MEM: Micro = memory("MBR ← M[MAR]", Mbr, Memory, Xfer::MbrFromMem);
+const MEM_MBR: Micro = memory("M[MAR] ← MBR", Memory, Mbr, Xfer::MemFromMbr);
+const AC_PLUS_MBR: Micro = alu("AC ← AC + MBR", Xfer::AcAddMbr);
+const AC_MINUS_MBR: Micro = alu("AC ← AC − MBR", Xfer::AcSubMbr);
+const AC_IN: Micro = bus("AC ← IN", Ac, In, Xfer::AcFromIn);
+
+// Кадр мікрооперації з підсвіткою; `xfer` — передача, яку він виконує.
+fn lit(phase: Phase, m: &Micro, xfer: Option<Xfer>) -> Frame {
+    Frame {
+        phase,
+        rtl: m.rtl.to_string(),
+        write: m.write.map(|p| p as u8),
+        read: m.read.map(|p| p as u8),
+        aux: m.aux,
+        active: m.active,
+        alu: m.alu,
+        control: m.write.is_some() || m.read.is_some(),
+        bus: m.bus,
+        wait: Wait::Brief,
+        xfer,
+    }
+}
+
+// Кадр без передачі, де світиться лише вказане.
+fn show(rtl: &str, read: Part, alu: bool, wait: Wait) -> Frame {
     Frame {
         phase: Phase::Execute,
-        rtl: "AC ← IN".into(),
-        write: Some(Ac as u8),
-        read: Some(In as u8),
-        active: mask(&[In, Ac]),
+        rtl: rtl.to_string(),
+        read: Some(read as u8),
+        aux: [false, false, alu, false],
+        active: bit(read),
+        alu,
         control: true,
-        bus: true,
-        xfer: Some(xfer),
+        wait,
         ..Frame::default()
     }
 }
@@ -157,13 +203,8 @@ fn input_frame(xfer: Xfer) -> Frame {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(rename_all = "camelCase"))]
 pub struct DataPathSnapshot {
-    pub ac: u16,
-    pub ir: u16,
-    pub mbr: u16,
-    pub pc: u16,
-    pub mar: u16,
-    pub input: u16,
-    pub output: u16,
+    #[cfg_attr(feature = "serde", serde(flatten))]
+    pub registers: Registers,
     pub state: State,
     pub fault: Option<Fault>,
     pub frame: Frame,
@@ -174,17 +215,13 @@ pub struct DataPathSnapshot {
 
 #[derive(Clone, Debug)]
 pub struct DataPath {
-    cpu: Cpu,
-    program: Program,
-    state: State,
-    fault: Option<Fault>,
+    base: Base,
     queue: VecDeque<Frame>,
     frame: Frame,
     // true, поки в черзі кадри вибірки; після них черга поповнюється виконанням.
     fetching: bool,
-    focus_row: Option<usize>,
-    trace: Vec<String>,
-    pub input_radix: Radix,
+    trace: VecDeque<String>,
+    trace_len: usize,
 }
 
 impl Default for DataPath {
@@ -194,70 +231,47 @@ impl Default for DataPath {
 }
 
 impl DataPath {
+    /// В оригінальному MarieDPath ввід типово шістнадцятковий.
     pub fn new() -> DataPath {
         DataPath {
-            cpu: Cpu::default(),
-            program: Program::default(),
-            state: State::NoProgram,
-            fault: None,
+            base: Base::new(Radix::Hex),
             queue: VecDeque::new(),
             frame: Frame::default(),
             fetching: false,
-            focus_row: None,
-            trace: Vec::new(),
-            input_radix: Radix::Hex,
+            trace: VecDeque::new(),
+            trace_len: 0,
         }
     }
 
     pub fn load(&mut self, program: Program) -> bool {
-        self.reset();
-        if program.lines.is_empty() {
-            return false;
-        }
-        self.cpu.load(&program);
-        self.program = program;
-        self.focus_row = Some(0);
-        self.state = State::Ready;
-        true
+        self.clear_animation();
+        self.base.load(program)
     }
 
     /// PC на початок, трасування з нуля; пам'ять і регістри не чіпаються.
     pub fn restart(&mut self) {
-        let Some(start) = self.program.start() else {
-            return;
-        };
-        self.cpu.pc = start;
-        self.fault = None;
-        self.queue.clear();
-        self.frame = Frame::default();
-        self.fetching = false;
-        self.focus_row = Some(0);
-        self.trace.clear();
-        self.state = State::Ready;
+        if self.base.restart() {
+            self.clear_animation();
+        }
     }
 
     pub fn reset(&mut self) {
-        let input_radix = self.input_radix;
-        *self = DataPath::new();
-        self.input_radix = input_radix;
+        self.base.reset();
+        self.clear_animation();
     }
 
+    fn clear_animation(&mut self) {
+        self.queue.clear();
+        self.frame = Frame::default();
+        self.fetching = false;
+        self.trace.clear();
+        self.trace_len = 0;
+    }
+
+    // Три кадри мікрооперації: підсвітка, передача, темний кадр.
     fn push(&mut self, phase: Phase, m: &Micro) {
-        let lit = Frame {
-            phase,
-            rtl: m.rtl.to_string(),
-            write: m.write.map(|p| p as u8),
-            read: m.read.map(|p| p as u8),
-            aux: m.aux,
-            active: mask(m.parts),
-            alu: m.alu,
-            control: m.write.is_some() || m.read.is_some(),
-            bus: m.bus,
-            wait: Wait::Brief,
-            xfer: None,
-        };
-        self.queue.push_back(lit.clone());
-        self.queue.push_back(Frame { xfer: Some(m.xfer), ..lit });
+        self.queue.push_back(lit(phase, m, None));
+        self.queue.push_back(lit(phase, m, Some(m.xfer)));
         self.push_dark(phase, m.rtl);
     }
 
@@ -267,53 +281,64 @@ impl DataPath {
 
     fn fail(&mut self, fault: Fault) {
         self.queue.clear();
-        self.fault = Some(fault);
-        self.state = State::Fault;
+        self.base.fail(fault);
     }
 
     fn trace_row(&mut self) {
-        let c = &self.cpu;
-        self.trace.push(format!(
+        let r = &self.base.cpu.reg;
+        let row = format!(
             " {:04X}  {:04X}  {:04X}  {:04X}  {:04X}  {:03X}  {:03X}",
-            c.ir, c.output, c.input, c.ac, c.mbr, c.pc, c.mar
-        ));
+            r.ir, r.output, r.input, r.ac, r.mbr, r.pc, r.mar
+        );
+        if self.trace.len() == TRACE_LIMIT {
+            self.trace.pop_front();
+        }
+        self.trace.push_back(row);
+        self.trace_len += 1;
     }
 
     fn apply(&mut self, xfer: Xfer) {
-        let c = &mut self.cpu;
-        let addr = c.ir & ADDR_MASK;
+        let Cpu { mem, reg: r } = &mut self.base.cpu;
+        let address = r.ir & ADDR_MASK;
         match xfer {
-            Xfer::MarFromPc => c.mar = c.pc,
-            Xfer::IrFromMem => c.ir = c.mem[c.mar as usize],
-            Xfer::PcInc => c.pc = (c.pc + 1) & ADDR_MASK,
-            Xfer::MbrFromPc => c.mbr = c.pc,
-            Xfer::MarFromIr => c.mar = addr,
-            Xfer::MbrFromIr => c.mbr = addr,
-            Xfer::AcOne => c.ac = 1,
-            Xfer::AcAddMbr => c.ac = c.ac.wrapping_add(c.mbr),
-            Xfer::AcSubMbr => c.ac = c.ac.wrapping_sub(c.mbr),
-            Xfer::PcFromAc => c.pc = c.ac & ADDR_MASK,
-            Xfer::MbrFromMem => c.mbr = c.mem[c.mar as usize],
-            Xfer::AcFromMbr => c.ac = c.mbr,
-            Xfer::MbrFromAc => c.mbr = c.ac,
-            Xfer::AcFromIn => c.ac = c.input,
-            Xfer::OutFromAc => c.output = c.ac,
-            Xfer::PcFromIr => c.pc = addr,
-            Xfer::AcClear => c.ac = 0,
-            Xfer::MarFromMbr => c.mar = c.mbr & ADDR_MASK,
-            Xfer::PcFromMbr => c.pc = c.mbr & ADDR_MASK,
             // Запис у пам'ять і зміни стану рядка трасування не дають.
-            Xfer::MemFromMbr => return c.mem[c.mar as usize] = c.mbr,
-            Xfer::AwaitInput => return self.state = State::BlockedOnInput,
-            Xfer::Halt => return self.state = State::Halted,
+            Xfer::MemFromMbr => {
+                mem[r.mar as usize] = r.mbr;
+                return;
+            }
+            Xfer::AwaitInput => {
+                self.base.state = State::BlockedOnInput;
+                return;
+            }
+            Xfer::Halt => {
+                self.base.state = State::Halted;
+                return;
+            }
+            Xfer::MarFromPc => r.mar = r.pc,
+            Xfer::IrFromMem => r.ir = mem[r.mar as usize],
+            Xfer::PcInc => r.pc = (r.pc + 1) & ADDR_MASK,
+            Xfer::MbrFromPc => r.mbr = r.pc,
+            Xfer::MarFromIr => r.mar = address,
+            Xfer::MbrFromIr => r.mbr = address,
+            Xfer::AcOne => r.ac = 1,
+            Xfer::AcAddMbr => r.ac = r.ac.wrapping_add(r.mbr),
+            Xfer::AcSubMbr => r.ac = r.ac.wrapping_sub(r.mbr),
+            Xfer::PcFromAc => r.pc = r.ac & ADDR_MASK,
+            Xfer::MbrFromMem => r.mbr = mem[r.mar as usize],
+            Xfer::AcFromMbr => r.ac = r.mbr,
+            Xfer::MbrFromAc => r.mbr = r.ac,
+            Xfer::AcFromIn => r.ac = r.input,
+            Xfer::OutFromAc => r.output = r.ac,
+            Xfer::PcFromIr => r.pc = address,
+            Xfer::AcClear => r.ac = 0,
+            Xfer::MarFromMbr => r.mar = r.mbr & ADDR_MASK,
+            Xfer::PcFromMbr => r.pc = r.mbr & ADDR_MASK,
         }
         self.trace_row();
     }
 
     fn begin_fetch(&mut self) {
-        if let Some(row) = self.program.row_of(self.cpu.pc) {
-            self.focus_row = Some(row);
-        }
+        self.base.focus_on_pc();
         self.fetching = true;
         self.push(Phase::Fetch, &MAR_PC);
         self.push(Phase::Fetch, &IR_MEM);
@@ -323,146 +348,88 @@ impl DataPath {
     // Після вибірки: кадр декодування й мікрооперації виконання.
     fn decode(&mut self) {
         self.fetching = false;
-        let ir = self.cpu.ir;
+        let ir = self.base.cpu.reg.ir;
         let opcode = ir >> 12;
         if opcode > op::JUMPI {
             return self.fail(Fault::IllegalOpcode);
         }
-        self.queue.push_back(Frame {
-            phase: Phase::Decode,
-            rtl: "Decode IR[15-12]".into(),
-            read: Some(Ir as u8),
-            active: mask(&[Ir]),
-            control: true,
-            ..Frame::default()
-        });
+        self.queue.push_back(Frame { phase: Phase::Decode, ..show("Decode IR[15-12]", Ir, false, Wait::Brief) });
 
         let x = Phase::Execute;
         match opcode {
             op::JNS => {
                 // RTN підручника: AC тут затирається (у MarieSim — ні).
-                self.push(x, &bus("MBR ← PC", Mbr, Pc, &[Pc, Mbr], Xfer::MbrFromPc));
+                self.push(x, &bus("MBR ← PC", Mbr, Pc, Xfer::MbrFromPc));
                 self.push(x, &MAR_IR);
                 self.push(x, &MEM_MBR);
-                self.push(x, &bus("MBR ← IR[11-0]", Mbr, Ir, &[Ir, Mbr], Xfer::MbrFromIr));
-                self.push(x, &Micro {
-                    rtl: "AC ← 1",
-                    write: Some(Ac),
-                    read: None,
-                    aux: NO_AUX,
-                    parts: &[Ac],
-                    alu: false,
-                    bus: false,
-                    xfer: Xfer::AcOne,
-                });
-                self.push(x, &ADD);
-                self.push(x, &bus("PC ← AC", Pc, Ac, &[Ac, Pc], Xfer::PcFromAc));
+                self.push(x, &bus("MBR ← IR[11-0]", Mbr, Ir, Xfer::MbrFromIr));
+                self.push(x, &set("AC ← 1", Ac, Xfer::AcOne));
+                self.push(x, &AC_PLUS_MBR);
+                self.push(x, &bus("PC ← AC", Pc, Ac, Xfer::PcFromAc));
             }
             op::LOAD => {
                 self.push(x, &MAR_IR);
                 self.push(x, &MBR_MEM);
-                self.push(x, &AC_MBR_DIRECT);
+                self.push(x, &direct("AC ← MBR", Xfer::AcFromMbr));
             }
             op::STORE => {
                 self.push(x, &MAR_IR);
-                self.push(x, &MBR_AC_DIRECT);
+                self.push(x, &direct("MBR ← AC", Xfer::MbrFromAc));
                 self.push(x, &MEM_MBR);
             }
             op::ADD | op::SUBT => {
                 self.push(x, &MAR_IR);
                 self.push(x, &MBR_MEM);
-                self.push(x, if opcode == op::ADD { &ADD } else { &SUB });
+                self.push(x, if opcode == op::ADD { &AC_PLUS_MBR } else { &AC_MINUS_MBR });
             }
-            op::INPUT => {
-                // Перший кадр блокує машину; решту додає `provide_input`.
-                self.queue.push_back(input_frame(Xfer::AwaitInput));
+            // Перший кадр блокує машину; решту додає `provide_input`.
+            op::INPUT => self.queue.push_back(lit(x, &AC_IN, Some(Xfer::AwaitInput))),
+            op::OUTPUT => self.push(x, &bus("OUT ← AC", Out, Ac, Xfer::OutFromAc)),
+            op::HALT => {
+                self.queue.push_back(Frame { phase: x, rtl: "Halt".into(), xfer: Some(Xfer::Halt), ..Frame::default() })
             }
-            op::OUTPUT => self.push(x, &bus("OUT ← AC", Out, Ac, &[Ac, Out], Xfer::OutFromAc)),
-            op::HALT => self.queue.push_back(Frame {
-                phase: x,
-                rtl: "Halt".into(),
-                wait: Wait::Brief,
-                xfer: Some(Xfer::Halt),
-                ..Frame::default()
-            }),
             op::SKIPCOND => self.skipcond(ir),
-            op::JUMP => self.push(x, &bus("PC ← IR[11-0]", Pc, Ir, &[Ir, Pc], Xfer::PcFromIr)),
-            op::CLEAR => self.push(x, &Micro {
-                rtl: "AC ← 0",
-                write: Some(Ac),
-                read: None,
-                aux: NO_AUX,
-                parts: &[Ac],
-                alu: false,
-                bus: false,
-                xfer: Xfer::AcClear,
-            }),
+            op::JUMP => self.push(x, &bus("PC ← IR[11-0]", Pc, Ir, Xfer::PcFromIr)),
+            op::CLEAR => self.push(x, &set("AC ← 0", Ac, Xfer::AcClear)),
             op::ADDI => {
                 self.push(x, &MAR_IR);
                 self.push(x, &MBR_MEM);
-                self.push(x, &bus("MAR ← MBR", Mar, Mbr, &[Mbr, Mar], Xfer::MarFromMbr));
+                self.push(x, &bus("MAR ← MBR", Mar, Mbr, Xfer::MarFromMbr));
                 self.push(x, &MBR_MEM);
-                self.push(x, &ADD);
+                self.push(x, &AC_PLUS_MBR);
             }
             op::JUMPI => {
                 self.push(x, &MAR_IR);
                 self.push(x, &MBR_MEM);
-                self.push(x, &bus("PC ← MBR", Pc, Mbr, &[Mbr, Pc], Xfer::PcFromMbr));
+                self.push(x, &bus("PC ← MBR", Pc, Mbr, Xfer::PcFromMbr));
             }
             _ => unreachable!(),
         }
     }
 
     fn skipcond(&mut self, ir: u16) {
-        let ac = self.cpu.ac as i16;
+        let ac = self.base.cpu.reg.ac as i16;
         let (bits, question, skip) = match (ir & 0x0C00) >> 10 {
             0 => ("IR[11-10] = 00", "AC < 0?", ac < 0),
             1 => ("IR[11-10] = 01", "AC = 0?", ac == 0),
             2 => ("IR[11-10] = 10", "AC > 0?", ac > 0),
             _ => return self.fail(Fault::IllegalCondition),
         };
-        let x = Phase::Execute;
-        self.queue.push_back(Frame {
-            phase: x,
-            rtl: bits.into(),
-            read: Some(Ir as u8),
-            active: mask(&[Ir]),
-            control: true,
-            ..Frame::default()
-        });
-        self.queue.push_back(Frame {
-            phase: x,
-            rtl: question.into(),
-            read: Some(Ac as u8),
-            aux: [false, false, true, false],
-            active: mask(&[Ac]),
-            alu: true,
-            control: true,
-            wait: Wait::Full,
-            ..Frame::default()
-        });
+        self.queue.push_back(show(bits, Ir, false, Wait::Brief));
+        self.queue.push_back(show(question, Ac, true, Wait::Full));
         if skip {
-            self.push(x, &Micro {
-                rtl: "PC ← PC + 1",
-                write: Some(Pc),
-                read: None,
-                aux: NO_AUX,
-                parts: &[Pc],
-                alu: false,
-                bus: false,
-                xfer: Xfer::PcInc,
-            });
+            self.push(Phase::Execute, &SKIP);
         } else {
-            self.push_dark(x, &format!("{question} FALSE"));
+            self.push_dark(Phase::Execute, &format!("{question} FALSE"));
         }
     }
 
     /// Показує наступний кадр. Повертає `true`, коли цим кадром команда завершилася.
     pub fn tick(&mut self) -> bool {
-        if !matches!(self.state, State::Ready | State::Paused) {
+        if !matches!(self.base.state, State::Ready | State::Paused) {
             return false;
         }
-        self.state = State::Ready;
+        self.base.state = State::Ready;
         if self.queue.is_empty() {
             self.begin_fetch();
         }
@@ -473,68 +440,70 @@ impl DataPath {
             self.apply(xfer);
         }
         self.frame = frame;
-        if !self.queue.is_empty() || self.state == State::BlockedOnInput {
+        if !self.queue.is_empty() || self.base.state == State::BlockedOnInput {
             return false;
         }
-        if self.fetching && self.state == State::Ready {
+        if self.fetching && self.base.state == State::Ready {
             self.decode();
-            return self.state == State::Fault;
+            return self.base.state == State::Fault;
         }
         true
     }
 
     /// Завершує команду Input: значення потрапляє в IN, далі анімація AC ← IN.
     pub fn provide_input(&mut self, text: &str) -> State {
-        if self.state != State::BlockedOnInput {
-            return self.state;
+        if self.base.state != State::BlockedOnInput {
+            return self.base.state;
         }
-        let Some(value) = parse_word(text, self.input_radix) else {
-            self.fail(Fault::IllegalInput);
-            return self.state;
-        };
-        self.cpu.input = value;
-        self.trace_row();
-        self.queue.push_back(input_frame(Xfer::AcFromIn));
-        self.push_dark(Phase::Execute, "AC ← IN");
-        self.state = State::Ready;
-        self.state
+        if self.base.accept_input(text) {
+            self.trace_row();
+            self.queue.push_back(lit(Phase::Execute, &AC_IN, Some(Xfer::AcFromIn)));
+            self.push_dark(Phase::Execute, AC_IN.rtl);
+        } else {
+            self.queue.clear();
+        }
+        self.base.state
     }
 
-    pub fn cpu(&self) -> &Cpu {
-        &self.cpu
+    pub fn set_input_radix(&mut self, radix: Radix) {
+        self.base.input_radix = radix;
+    }
+
+    pub fn registers(&self) -> &Registers {
+        &self.base.cpu.reg
+    }
+
+    pub fn memory(&self) -> &[u16] {
+        &self.base.cpu.mem
     }
 
     pub fn program(&self) -> &Program {
-        &self.program
+        &self.base.program
     }
 
     pub fn state(&self) -> State {
-        self.state
+        self.base.state
     }
 
     pub fn fault(&self) -> Option<Fault> {
-        self.fault
+        self.base.fault
     }
 
-    /// Рядки трасування, починаючи з `from`.
-    pub fn trace(&self, from: usize) -> &[String] {
-        &self.trace[from.min(self.trace.len())..]
+    /// Рядки трасування з номера `from` (від рестарту). Старіші за останні
+    /// `TRACE_LIMIT` уже відкинуто.
+    pub fn trace(&self, from: usize) -> impl Iterator<Item = &str> {
+        let dropped = self.trace_len - self.trace.len();
+        self.trace.iter().skip(from.saturating_sub(dropped)).map(String::as_str)
     }
 
     pub fn snapshot(&self) -> DataPathSnapshot {
         DataPathSnapshot {
-            ac: self.cpu.ac,
-            ir: self.cpu.ir,
-            mbr: self.cpu.mbr,
-            pc: self.cpu.pc,
-            mar: self.cpu.mar,
-            input: self.cpu.input,
-            output: self.cpu.output,
-            state: self.state,
-            fault: self.fault,
+            registers: self.base.cpu.reg,
+            state: self.base.state,
+            fault: self.base.fault,
             frame: self.frame.clone(),
-            focus_row: self.focus_row,
-            trace_len: self.trace.len(),
+            focus_row: self.base.focus_row,
+            trace_len: self.trace_len,
         }
     }
 }
@@ -597,16 +566,16 @@ mod tests {
         assert!(first.bus && first.control);
         assert_eq!(first.wait, Wait::Brief);
         // Передача стається на другому кадрі мікрооперації.
-        assert_eq!(d.cpu().mar, 0);
+        assert_eq!(d.registers().mar, 0);
         d.tick();
-        assert_eq!(d.cpu().mar, 0x100);
+        assert_eq!(d.registers().mar, 0x100);
         d.tick();
         assert_eq!(d.snapshot().frame.wait, Wait::Full);
         assert_eq!(d.snapshot().frame.active, 0);
 
         d.restart();
         assert_eq!(instruction(&mut d), with_fetch(&["MAR ← IR[11-0]", "MBR ← M[MAR]", "AC ← MBR"]));
-        let c = d.cpu();
+        let c = d.registers();
         assert_eq!((c.ir, c.mar, c.mbr, c.ac, c.pc), (0x1102, 0x102, 7, 7, 0x101));
     }
 
@@ -638,7 +607,7 @@ mod tests {
         assert_eq!(instruction(&mut d), with_fetch(&["AC ← 0"]));
         assert_eq!(instruction(&mut d), with_fetch(&["PC ← IR[11-0]"]));
         assert_eq!(instruction(&mut d), with_fetch(&[m, r, "PC ← MBR"]));
-        assert_eq!(d.cpu().pc, 0x00B);
+        assert_eq!(d.registers().pc, 0x00B);
         assert_eq!(instruction(&mut d), with_fetch(&["Halt"]));
         assert_eq!(d.state(), State::Halted);
     }
@@ -659,17 +628,17 @@ mod tests {
                 "PC ← AC",
             ])
         );
-        let c = d.cpu();
-        assert_eq!((c.mem[4], c.pc, c.mbr, c.ac), (2, 5, 4, 5));
+        let c = d.registers();
+        assert_eq!((d.memory()[4], c.pc, c.mbr, c.ac), (2, 5, 4, 5));
     }
 
     #[test]
     fn skipcond_shows_condition_and_result() {
         let mut d = datapath("Skipcond 400\nHalt\nSkipcond 800\nHalt\n");
         assert_eq!(instruction(&mut d), with_fetch(&["IR[11-10] = 01", "AC = 0?", "PC ← PC + 1"]));
-        assert_eq!(d.cpu().pc, 2);
+        assert_eq!(d.registers().pc, 2);
         assert_eq!(instruction(&mut d), with_fetch(&["IR[11-10] = 10", "AC > 0?", "AC > 0? FALSE"]));
-        assert_eq!(d.cpu().pc, 3);
+        assert_eq!(d.registers().pc, 3);
 
         let mut d = datapath("Skipcond 0C00\n");
         instruction(&mut d);
@@ -692,12 +661,12 @@ mod tests {
         assert_eq!(d.state(), State::BlockedOnInput);
         assert!(!d.tick());
         assert_eq!(d.provide_input("2A"), State::Ready);
-        assert_eq!(d.cpu().input, 0x2A);
+        assert_eq!(d.registers().input, 0x2A);
         // Крок після вводу завершує Input, але не чіпає наступну команду.
         instruction(&mut d);
-        assert_eq!((d.cpu().ac, d.cpu().pc), (0x2A, 1));
+        assert_eq!((d.registers().ac, d.registers().pc), (0x2A, 1));
         run(&mut d);
-        assert_eq!((d.state(), d.cpu().output), (State::Halted, 0x2A));
+        assert_eq!((d.state(), d.registers().output), (State::Halted, 0x2A));
 
         d.restart();
         instruction(&mut d);
@@ -710,7 +679,7 @@ mod tests {
         instruction(&mut d);
         instruction(&mut d);
         assert_eq!(
-            d.trace(0),
+            d.trace(0).collect::<Vec<_>>(),
             [
                 " 0000  0000  0000  0000  0000  100  100",
                 " 1103  0000  0000  0000  0000  100  100",
@@ -724,11 +693,24 @@ mod tests {
                 " 6000  0005  0000  0005  0005  102  101",
             ]
         );
-        assert_eq!(d.trace(8).len(), 2);
+        assert_eq!(d.trace(8).count(), 2);
         assert_eq!(d.snapshot().trace_len, 10);
         d.restart();
-        assert!(d.trace(0).is_empty());
-        assert_eq!(d.cpu().ac, 5);
+        assert_eq!(d.trace(0).count(), 0);
+        assert_eq!(d.snapshot().trace_len, 0);
+        assert_eq!(d.registers().ac, 5);
+    }
+
+    #[test]
+    fn trace_keeps_only_the_latest_rows() {
+        let mut d = datapath("Loop, Jump Loop\n");
+        while d.snapshot().trace_len < TRACE_LIMIT + 10 {
+            d.tick();
+        }
+        let total = d.snapshot().trace_len;
+        assert_eq!(d.trace(0).count(), TRACE_LIMIT);
+        assert_eq!(d.trace(total - 3).count(), 3);
+        assert_eq!(d.trace(total).count(), 0);
     }
 
     #[test]
@@ -751,7 +733,10 @@ One, DEC 1
         m.load(assemble(source).program().unwrap());
         m.run(10_000, false);
         assert_eq!(d.state(), State::Halted);
-        assert_eq!(d.cpu().mem, m.cpu().mem);
-        assert_eq!((d.cpu().ac, d.cpu().pc, d.cpu().output), (m.cpu().ac, m.cpu().pc, m.cpu().output));
+        assert_eq!(d.memory(), m.memory());
+        assert_eq!(
+            (d.registers().ac, d.registers().pc, d.registers().output),
+            (m.registers().ac, m.registers().pc, m.registers().output)
+        );
     }
 }

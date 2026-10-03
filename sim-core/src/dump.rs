@@ -1,7 +1,7 @@
 //! Core dump у форматі оригінального `.dmp`.
 
 use crate::machine::Machine;
-use crate::{Radix, ADDR_MASK};
+use crate::{format_address, format_word, Radix, ADDR_MASK};
 
 /// Системи числення регістрів на панелі: дамп показує їх «як на екрані».
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -14,39 +14,45 @@ pub struct RegisterRadix {
     pub mbr: Radix,
 }
 
-// Оригінальний `Register.toString()`; `None` — порожнє поле (нуль у режимі ASCII).
-fn render(value: u16, radix: Radix, address: bool) -> Option<String> {
-    match radix {
-        Radix::Hex if address => Some(format!("  {value:03X}")),
-        Radix::Hex => Some(format!(" {value:04X}")),
-        Radix::Dec if (value as i16) > 0 => Some(format!(" {value}")),
-        Radix::Dec => Some((value as i16).to_string()),
-        Radix::Ascii if value == 0 => None,
-        Radix::Ascii => Some(format!("    {}", (value % 128) as u8 as char)),
-    }
+// Оригінальний `Register.toString()`: значення з відступом, що залежить від
+// системи числення; порожнє поле (нуль у режимі ASCII) друкується як `null`.
+fn render(text: String, value: u16, radix: Radix, address: bool) -> String {
+    let indent = match radix {
+        Radix::Hex if address => "  ",
+        Radix::Hex => " ",
+        Radix::Dec if (value as i16) > 0 => " ",
+        Radix::Dec => "",
+        Radix::Ascii if text.is_empty() => return "null".into(),
+        Radix::Ascii => "    ",
+    };
+    format!("{indent}{text}")
 }
 
-fn text(rendered: Option<String>) -> String {
-    rendered.unwrap_or_else(|| "null".into())
+fn word(value: u16, radix: Radix) -> String {
+    render(format_word(value, radix), value, radix, false)
+}
+
+fn address(value: u16, radix: Radix) -> String {
+    render(format_address(value, radix), value, radix, true)
 }
 
 pub fn core_dump(m: &Machine, title: &str, timestamp: &str, start: u16, end: u16, radix: RegisterRadix) -> String {
-    let c = m.cpu();
+    let r = m.registers();
     let (start, end) = (start.min(end) & ADDR_MASK, start.max(end) & ADDR_MASK);
 
     let mut out = format!("Machine dump for {title}           {timestamp}\n\n\n");
     out += &format!(
         "    PC: {}   MAR: {}      AC: {}\n",
-        text(render(c.pc, radix.pc, true)),
-        text(render(c.mar, radix.mar, true)),
-        text(render(c.ac, radix.ac, false))
+        address(r.pc, radix.pc),
+        address(r.mar, radix.mar),
+        word(r.ac, radix.ac)
     );
     out += &format!(
         "    IR: {}   MBR: {}   INPUT:  {}  OUTPUT: {}\n",
-        text(render(c.ir, radix.ir, false)),
-        text(render(c.mbr, radix.mbr, false)),
-        text(render(c.input, m.input_radix, false)).trim(),
-        text(render(c.output, m.output_radix, false)).trim()
+        word(r.ir, radix.ir),
+        word(r.mbr, radix.mbr),
+        word(r.input, m.input_radix()).trim(),
+        word(r.output, m.output_radix()).trim()
     );
     out += &format!("\n       Memory dump for addresses {start:03X} through {end:03X}\n\n");
 
@@ -54,7 +60,7 @@ pub fn core_dump(m: &Machine, title: &str, timestamp: &str, start: u16, end: u16
         if i % 8 == 0 {
             out += &format!(" {address:03X}:  ");
         }
-        out += &format!(" {:04X}  ", c.mem[address as usize]);
+        out += &format!(" {:04X}  ", m.memory()[address as usize]);
         if i % 8 == 7 || address == end {
             out.push('\n');
         }
@@ -93,7 +99,7 @@ Machine dump for demo.mas           NOW
         let mut m = Machine::new();
         m.load(assemble("Load X\nHalt\nX, DEC -2\n").program().unwrap());
         m.run(100, false);
-        m.input_radix = Radix::Dec;
+        m.set_input_radix(Radix::Dec);
         let radix = RegisterRadix { ac: Radix::Dec, pc: Radix::Dec, ..RegisterRadix::default() };
         let text = core_dump(&m, "t", "", 5, 0, radix);
         assert!(text.contains("    PC:  2   MAR:   001      AC: -2\n"));
